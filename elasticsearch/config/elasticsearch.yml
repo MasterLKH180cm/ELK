@@ -1,0 +1,9 @@
+cluster.name: "elk-cluster"
+network.host: 0.0.0.0
+
+# Disable security for development (enable in production)
+xpack.security.enabled: false
+xpack.monitoring.collection.enabled: true
+
+# Index settings
+action.auto_create_index: true

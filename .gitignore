@@ -1,0 +1,11 @@
+# Elasticsearch data
+elasticsearch_data/
+
+# Logs
+*.log
+
+# Environment variables (if containing sensitive data)
+# .env
+
+# Docker volumes
+volumes/
