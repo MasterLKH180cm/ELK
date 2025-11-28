@@ -49,5 +49,12 @@ docker-compose logs -f kibana
 
 ## Testing
 
-1. Run `scripts/test-logstash-http.sh` (or pass a JSON string as the first argument) to POST a sample event to the HTTP input on port 8081.
-2. Watch `docker-compose logs -f logstash` or check Kibana Discover to confirm the document arrived.
+Prerequisites: `curl`, `bash`, and `python3` available on your host.
+
+1. `chmod +x scripts/test-logstash-http.sh`
+2. Optionally override targets (`LOGSTASH_HOST`, `LOGSTASH_PORT`, `ES_HOST`, `ES_PORT`, `SLEEP_SECONDS`) and run:
+   ```bash
+   scripts/test-logstash-http.sh "optional custom message"
+   ```
+3. The script POSTs a JSON event (with a unique `test_id`) to `localhost:8081`, waits briefly, and queries Elasticsearch for that ID. It exits non-zero if the document is not found so CI can flag ingestion problems.
+4. Run `scripts/test-elk-stack.sh` to hit Elasticsearch (`/_cluster/health`), Logstash (`/_node/stats`), Kibana (`/api/status`), and then invoke `scripts/test-logstash-http.sh` to ensure an event flows through the stack. The script exits non-zero if any service fails its health check or the document is not indexed.
