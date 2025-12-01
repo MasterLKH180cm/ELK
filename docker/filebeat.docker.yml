@@ -1,0 +1,19 @@
+filebeat.autodiscover.providers:
+  - type: docker
+    templates:
+      - config:
+          - type: container
+            paths:
+              - /var/lib/docker/containers/${data.docker.container.id}/*.log
+            processors:
+              - add_fields:
+                  target: ""
+                  fields:
+                    demo: docker
+                    container_name: "${data.docker.container.name}"
+
+output.elasticsearch:
+  hosts: ["http://elasticsearch:9200"]
+
+setup.kibana:
+  host: "kibana:5601"
