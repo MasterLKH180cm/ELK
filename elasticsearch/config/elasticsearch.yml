@@ -7,3 +7,10 @@ xpack.monitoring.collection.enabled: true
 
 # Index settings
 action.auto_create_index: true
+
+# Node setup
+node.name: "es01"
+discovery.type: single-node
+
+# Memory
+bootstrap.memory_lock: true

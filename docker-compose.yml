@@ -29,6 +29,7 @@ services:
       - ./logstash/config/logstash.yml:/usr/share/logstash/config/logstash.yml:ro
       - ./logstash/pipeline:/usr/share/logstash/pipeline:ro
     ports:
+      - "5044:5044"
       - "8080:8080"
       - "8081:8081"
       - "9600:9600"
@@ -68,6 +69,44 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
+    restart: unless-stopped
+
+  # app:
+  #   image: ghcr.io/astral-sh/uv:latest
+  #   container_name: fastapi_app
+  #   working_dir: /workspace
+  #   volumes:
+  #     - .:/workspace
+  #   command: >
+  #     sh -c "uv sync && uv run uvicorn scripts.backend.fastapi_logging:app --host 0.0.0.0 --port 8000"
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - ELASTICSEARCH_URL=http://elasticsearch:9200
+  #     - FASTAPI_LOG_INDEX=fastapi-logs
+  #   networks:
+  #     - elk
+  #   depends_on:
+  #     elasticsearch:
+  #       condition: service_healthy
+  #   restart: unless-stopped
+
+  filebeat:
+    build:
+      context: ./filebeat
+      dockerfile: Dockerfile
+      args:
+        ELASTIC_VERSION: ${ELASTIC_VERSION}
+    container_name: filebeat
+    user: root
+    volumes:
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - elk
+    depends_on:
+      - elasticsearch
+      - kibana
     restart: unless-stopped
 
 volumes:

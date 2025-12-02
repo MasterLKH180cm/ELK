@@ -2,5 +2,10 @@ server.name: kibana
 server.host: "0.0.0.0"
 elasticsearch.hosts: ["http://elasticsearch:9200"]
 
+# Clean UI
+telemetry.enabled: false
+
 # Monitoring
 monitoring.ui.container.elasticsearch.enabled: true
+
+xpack.screenshotting.browser.chromium.disableSandbox: true

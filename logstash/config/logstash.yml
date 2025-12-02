@@ -1,11 +1,13 @@
-api.http.host: "0.0.0.0"
-xpack.monitoring.elasticsearch.hosts: ["http://elasticsearch:9200"]
+http.host: "0.0.0.0"
 xpack.monitoring.enabled: true
+xpack.monitoring.elasticsearch.hosts: ["http://elasticsearch:9200"]
 
 # Pipeline settings
-pipeline.workers: 1
+pipeline.workers: 2
 pipeline.batch.size: 125
 pipeline.batch.delay: 50
+pipeline.ordered: auto
+path.config: /usr/share/logstash/pipeline/*.conf
 
 # Queue settings
 queue.type: memory
@@ -16,4 +18,4 @@ config.reload.automatic: false
 config.reload.interval: 3s
 
 # Log settings
-log.level: info
+# log.level: info
