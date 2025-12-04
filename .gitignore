@@ -5,7 +5,7 @@ elasticsearch_data/
 *.log
 
 # Environment variables (if containing sensitive data)
-# .env
+.env
 
 # Docker volumes
 volumes/

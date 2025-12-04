@@ -9,3 +9,4 @@ telemetry.enabled: false
 monitoring.ui.container.elasticsearch.enabled: true
 
 xpack.screenshotting.browser.chromium.disableSandbox: true
+uiSettings.overrides.theme:darkMode: true

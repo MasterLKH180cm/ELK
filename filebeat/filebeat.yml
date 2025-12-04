@@ -1,13 +1,22 @@
 filebeat.inputs:
-  - type: log
+  - type: filestream
+    id: mocklogs
     enabled: true
     paths:
       - /logs/*.log
       - /logs/*.json
-    json.keys_under_root: true
-    json.add_error_key: true
+    parsers:
+      - ndjson:
+          target: ""
+          add_error_key: true
+    # json.keys_under_root: true
+    # json.add_error_key: true
+    # json.message_key: message
+    # ignore_older: 0
+    # scan_frequency: 1s
+    # prospector.scanner.check_interval: 1s
 
 output.logstash:
   hosts: ["logstash:5044"]
 
-logging.level: info
+logging.level: debug
