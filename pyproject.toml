@@ -7,9 +7,16 @@ dependencies = [
 	"ecs-logging>=2.2.0",
 	"elasticsearch>=8.0,<9.0",
 	"faker>=38.2.0",
-	"fastapi>=0.110.0",
+	"fastapi>=0.104.0",
 	"tqdm>=4.67.1",
-	"uvicorn[standard]>=0.29.0",
+	"uvicorn[standard]>=0.24.0",
+	"kafka-python>=2.0.2",
+	"opentelemetry-api>=1.20.0",
+	"opentelemetry-sdk>=1.20.0",
+	"opentelemetry-exporter-otlp>=0.41b0",
+	"opentelemetry-instrumentation-fastapi>=0.41b0",
+	"opentelemetry-instrumentation-requests>=0.41b0",
+	"opentelemetry-instrumentation-logging>=0.41b0",
 ]
 
 [project.optional-dependencies]

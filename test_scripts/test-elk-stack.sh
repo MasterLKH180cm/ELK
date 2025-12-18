@@ -27,6 +27,6 @@ LOGSTASH_HOST=$LOGSTASH_HOST \
 LOGSTASH_PORT=$LOGSTASH_HTTP_PORT \
 ES_HOST=$ES_HOST \
 ES_PORT=$ES_PORT \
-scripts/test-logstash-http.sh "$TEST_MESSAGE"
+bash test_scripts/test-logstash-http.sh "$TEST_MESSAGE"
 
 echo "✓ All services verified."
