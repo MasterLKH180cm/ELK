@@ -72,13 +72,13 @@ sync:
 	uv sync
 	@echo "✓ Dependencies installed"
 
-run-otel: sync
+dev: sync
 	@echo "Starting FastAPI OTel app on http://localhost:8000"
-	uv run uvicorn src.backend.fastapi_otel_logging:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn src.fastapi_otel_logging:app --host 0.0.0.0 --port 8000 --reload
 
-run-fastapi: sync
+test-fastapi: sync
 	@echo "Starting FastAPI logging app on http://localhost:8000"
-	uv run uvicorn src.backend.fastapi_logging:app --host 0.0.0.0 --port 8000 --reload
+	uv run uvicorn scripts.backend.fastapi_logging:app --host 0.0.0.0 --port 8000 --reload
 
 test-kafka:
 	@echo "Testing Kafka connectivity..."

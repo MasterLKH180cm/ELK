@@ -27,9 +27,19 @@ For convenience, use the included Makefile for common tasks:
 ```bash
 make help              # Show all available commands
 make up                # Start all services
+make down              # Stop services
+make down-volumes      # Stop and remove volumes
+make ps                # Show container status
 make status            # Check service health
 make logs              # Tail all service logs
-make run-otel          # Start FastAPI OTel app
+make logs-es           # Tail Elasticsearch logs
+make logs-logstash     # Tail Logstash logs
+make logs-kibana       # Tail Kibana logs
+make logs-kafka        # Tail Kafka logs
+make sync              # Install uv dependencies
+make dev               # Run FastAPI OTel app locally
+make test-fastapi      # Run FastAPI logging app locally
+make test-kafka        # Test Kafka connectivity
 make test-stack        # Run full integration tests
 make clean             # Stop and remove all containers/volumes
 ```
@@ -95,3 +105,12 @@ docker compose up -d
 - `app`: runs the FastAPI sample under uv.
 - `filebeat`: tails `/var/lib/docker/containers/*/*.log`, adds container metadata, and forwards everything to Elasticsearch.
 Inspect data in Kibana Discover using `docker-*`, `fastapi-logs`, or `python-logs` index patterns.
+
+## Quick Access URLs
+- **Kibana**: http://localhost:5601
+- **Elasticsearch**: http://localhost:9200
+- **FastAPI App**: http://localhost:8000
+- **ZooNavigator**: http://localhost:9000
+- **Logstash**: localhost:5000 (TCP), localhost:5044 (Beats), localhost:8081 (HTTP), localhost:9600 (API)
+- **Kafka**: localhost:9092
+- **Zookeeper**: localhost:2181
