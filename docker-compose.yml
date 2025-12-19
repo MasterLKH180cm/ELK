@@ -4,12 +4,10 @@ services:
     container_name: elasticsearch
     environment:
       - discovery.type=single-node
-      - "ES_JAVA_OPTS=-Xms${ES_HEAP_SIZE} -Xmx${ES_HEAP_SIZE}"
       - xpack.security.enabled=false
-      - xpack.monitoring.collection.enabled=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
     ports:
-      - "${ES_PORT}:9200"
-      - "9300:9300"
+      - "9200:9200"
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
       - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
@@ -35,10 +33,14 @@ services:
       - "9600:9600"
     environment:
       - "LS_JAVA_OPTS=-Xms${LS_HEAP_SIZE} -Xmx${LS_HEAP_SIZE}"
+      - ES_HOST=elasticsearch
+      - ES_PORT=9200
     networks:
       - elk
     depends_on:
       elasticsearch:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
@@ -52,7 +54,7 @@ services:
     image: docker.elastic.co/kibana/kibana:${ELASTIC_VERSION}
     container_name: kibana
     ports:
-      - "${KIBANA_PORT}:5601"
+      - "5601:5601"
     environment:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - SERVER_NAME=kibana
@@ -81,7 +83,7 @@ services:
     environment:
       - ELASTICSEARCH_URL=http://elasticsearch:9200
       - FASTAPI_LOG_INDEX=fastapi-otel-logs
-      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:29092
     networks:
       - elk
     depends_on:
@@ -116,9 +118,6 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
-      ZOOKEEPER_SYNC_LIMIT: 2
-      ZOOKEEPER_INIT_LIMIT: 5
-      SERVER_JVMFLAGS: "-Xms256M -Xmx256M"
     ports:
       - "2181:2181"
     networks:
@@ -131,21 +130,22 @@ services:
       start_period: 20s
     restart: unless-stopped
 
-  zookeeper-ui:
-    image: elkozmon/zoonavigator:latest
-    container_name: zoonavigator
-    ports:
-      - "9000:9000"
-    environment:
-      HTTP_PORT: 9000
-      API_HOST: "zookeeper"
-      API_PORT: 2181
-    depends_on:
-      zookeeper:
-        condition: service_healthy
-    networks:
-      - elk
-    restart: unless-stopped
+  # zookeeper-ui disabled due to potential HTTP probes on Kafka port 9092
+  # zookeeper-ui:
+  #   image: elkozmon/zoonavigator:latest
+  #   container_name: zoonavigator
+  #   ports:
+  #     - "9000:9000"
+  #   environment:
+  #     HTTP_PORT: 9000
+  #     API_HOST: "zookeeper"
+  #     API_PORT: 2181
+  #   depends_on:
+  #     zookeeper:
+  #       condition: service_healthy
+  #   networks:
+  #     - elk
+  #   restart: unless-stopped
 
   kafka:
     image: confluentinc/cp-kafka:7.5.0
@@ -156,17 +156,13 @@ services:
     environment:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_INTERNAL://kafka:29092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092,EXTERNAL://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
-      KAFKA_LOG_RETENTION_HOURS: 24
-      KAFKA_LOG_SEGMENT_BYTES: 1073741824
-      KAFKA_COMPRESSION_TYPE: snappy
-      KAFKA_HEAP_OPTS: "-Xms512M -Xmx512M"
-      KAFKA_MIN_INSYNC_REPLICAS: 1
-      KAFKA_DEFAULT_REPLICATION_FACTOR: 1
+      KAFKA_MESSAGE_MAX_BYTES: "2097152"
+      KAFKA_REPLICA_FETCH_MAX_BYTES: "2097152"
     ports:
       - "9092:9092"
     networks:
@@ -177,6 +173,22 @@ services:
       timeout: 5s
       retries: 5
       start_period: 40s
+    restart: unless-stopped
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: kafka-ui
+    ports:
+      - "8888:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
+      KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+    networks:
+      - elk
+    depends_on:
+      kafka:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:
