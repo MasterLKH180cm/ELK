@@ -190,8 +190,12 @@ make test-kafka
 
 **2. View Kafka messages (console consumer):**
 ```bash
-docker exec kafka kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
+# docker exec kafka kafka-console-consumer.sh \
+#   --bootstrap-server localhost:9092 \
+#   --topic fastapi-logs \
+#   --from-beginning
+docker exec kafka-tools kafka-console-consumer.sh \
+  --bootstrap-server kafka:29092 \
   --topic fastapi-logs \
   --from-beginning
 ```
