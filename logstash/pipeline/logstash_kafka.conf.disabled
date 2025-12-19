@@ -1,0 +1,31 @@
+input {
+  kafka {
+    bootstrap_servers => "kafka:29092"
+    topics => ["fastapi-logs"]
+    group_id => "logstash-group"
+    codec => "json"
+    auto_offset_reset => "earliest"
+    session_timeout_ms => 30000
+    request_timeout_ms => 40000
+    connections_max_idle_ms => 540000
+    retry_backoff_ms => 100
+    reconnect_backoff_ms => 50
+  }
+}
+
+filter {
+  mutate {
+    add_field => { "[@metadata][index_name]" => "fastapi-logs-%{+YYYY.MM.dd}" }
+  }
+}
+
+output {
+  elasticsearch {
+    hosts => ["elasticsearch:9200"]
+    index => "%{[@metadata][index_name]}"
+  }
+  
+  stdout {
+    codec => rubydebug
+  }
+}

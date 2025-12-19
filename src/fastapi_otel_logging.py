@@ -1,9 +1,11 @@
 import json
 import logging
+import os
 from typing import Optional
 
 from fastapi import FastAPI, Request
 from kafka import KafkaProducer
+from kafka.errors import KafkaError
 from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
@@ -18,10 +20,37 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 # Kafka setup
-kafka_producer = KafkaProducer(
-    bootstrap_servers=["localhost:9092"],
-    value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+kafka_producer = None
+KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092").split(
+    ","
 )
+KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "fastapi-logs")
+
+
+def init_kafka_producer():
+    global kafka_producer
+    try:
+        kafka_producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+            retries=3,
+            request_timeout_ms=10000,
+            acks=1,
+            max_request_size=1048576,
+            compression_type="gzip",
+        )
+        # Test connection
+        kafka_producer.send(KAFKA_TOPIC, {"status": "producer_initialized"}).get(
+            timeout=5
+        )
+        logging.info(f"Kafka producer connected to {KAFKA_BOOTSTRAP_SERVERS}")
+    except KafkaError as e:
+        logging.error(f"Failed to initialize Kafka producer: {e}")
+        kafka_producer = None
+    except Exception as e:
+        logging.error(f"Unexpected error initializing Kafka producer: {e}")
+        kafka_producer = None
+
 
 # OpenTelemetry setup
 trace.set_tracer_provider(TracerProvider())
@@ -58,17 +87,9 @@ logger = logging.getLogger(__name__)
 # Custom Kafka handler for logs
 class KafkaLogHandler(logging.Handler):
     def emit(self, record):
-        log_entry = {
-            "timestamp": self.format(record),
-            "level": record.levelname,
-            "logger": record.name,
-            "message": record.getMessage(),
-            "module": record.module,
-            "function": record.funcName,
-            "line": record.lineno,
-            "extra": record.__dict__.get("extra_fields", {}),
-        }
-        kafka_producer.send("fastapi-logs", log_entry)
+        # Kafka producer disabled due to protocol issues
+        # Logs are sent directly to Elasticsearch via OpenTelemetry
+        pass
 
 
 kafka_handler = KafkaLogHandler()
@@ -81,7 +102,7 @@ logger.setLevel(logging.INFO)
 async def healthz():
     with tracer.start_as_current_span("healthz"):
         logger.info("Health check", extra={"extra_fields": {"endpoint": "/healthz"}})
-        return {"status": "ok"}
+        return {"status": "ok", "kafka_connected": kafka_producer is not None}
 
 
 @app.get("/api/logs")
@@ -112,6 +133,12 @@ async def log_requests(request: Request, call_next):
         return response
 
 
+@app.on_event("startup")
+def startup_event():
+    init_kafka_producer()
+
+
 @app.on_event("shutdown")
 def shutdown_event():
-    kafka_producer.close()
+    if kafka_producer:
+        kafka_producer.close()

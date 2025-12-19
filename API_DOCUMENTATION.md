@@ -218,15 +218,7 @@ curl http://localhost:9200/_cat/indices?v
 
 **3. Search logs:**
 ```bash
-curl -X POST http://localhost:9200/logstash-*/_search \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "query": {
-      "match": {
-        "message": "GET"
-      }
-    }
-  }' | jq '.'
+curl -X POST http://localhost:9200/logstash-*/_search -H 'Content-Type: application/json' -d '{ "query": { "match": { "message": "GET" } } }' | jq '.'
 ```
 
 **4. Access Kibana UI:**

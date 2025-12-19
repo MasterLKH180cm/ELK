@@ -5,18 +5,40 @@ filebeat.inputs:
     paths:
       - /logs/*.log
       - /logs/*.json
+    prospector.scanner.check_interval: 10s
+    close.on_state_change.inactive: 5m
+    close.reader.after_interval: 10m
     parsers:
       - ndjson:
           target: ""
           add_error_key: true
-    # json.keys_under_root: true
-    # json.add_error_key: true
-    # json.message_key: message
-    # ignore_older: 0
-    # scan_frequency: 1s
-    # prospector.scanner.check_interval: 1s
+    backoff.init: 1s
+    backoff.max: 10s
+    max_backoff: 10s
+    backoff.factor: 2
+    clean_inactive: 24h
+    ignore_older: 72h
+
+filebeat.registry.flush: 5s
+filebeat.registry.file_permissions: 0600
+
+monitoring.enabled: true
+monitoring.elasticsearch.hosts: ["http://elasticsearch:9200"]
 
 output.logstash:
   hosts: ["logstash:5044"]
+  bulk_max_size: 2048
+  worker: 2
+  compression_level: 4
+  loadbalance: true
+  pipelining: 128
+  timeout: 30s
+  slow_start: false
 
-logging.level: debug
+queue.mem:
+  events: 4096
+  flush.min_events: 512
+  flush.timeout: 1s
+
+logging.level: info
+logging.metrics.enabled: false

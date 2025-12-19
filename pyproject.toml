@@ -17,6 +17,7 @@ dependencies = [
 	"opentelemetry-instrumentation-fastapi>=0.41b0",
 	"opentelemetry-instrumentation-requests>=0.41b0",
 	"opentelemetry-instrumentation-logging>=0.41b0",
+	"opentelemetry-exporter-otlp-proto-grpc>=1.39.1",
 ]
 
 [project.optional-dependencies]

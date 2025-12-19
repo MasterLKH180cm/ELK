@@ -1,4 +1,4 @@
-.PHONY: help up down logs sync run-otel run-fastapi test-kafka clean ps status
+.PHONY: help up down logs sync run-otel run-fastapi test-kafka clean ps status kafka-health kafka-topics kafka-consumer kafka-monitor
 
 help:
 	@echo "ELK Stack + Kafka + FastAPI OTel Makefile"
@@ -17,6 +17,10 @@ help:
 	@echo "  make run-otel        - Start FastAPI OTel app (port 8000)"
 	@echo "  make run-fastapi     - Start FastAPI logging app (port 8000)"
 	@echo "  make test-kafka      - Test Kafka connectivity"
+	@echo "  make kafka-health    - Check detailed Kafka health status"
+	@echo "  make kafka-topics    - List all Kafka topics"
+	@echo "  make kafka-consumer  - Consume messages from fastapi-logs topic"
+	@echo "  make kafka-monitor   - Monitor Kafka health + consumer lag continuously"
 	@echo "  make test-stack      - Run full ELK stack tests"
 	@echo "  make clean           - Remove all containers and volumes"
 	@echo "  make status          - Check service health status"
@@ -51,7 +55,7 @@ status:
 	@curl -s http://localhost:9600/_node/stats | jq '.jvm.pid' || echo "❌ Not responding"
 	@echo ""
 	@echo "=== Kafka ==="
-	@docker exec kafka kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1 && echo "✓ Kafka ready" || echo "❌ Not responding"
+	@docker exec kafka kafka-broker-api-versions.sh --bootstrap-server kafka:29092 > /dev/null 2>&1 && echo "✓ Kafka ready" || echo "❌ Not responding"
 
 logs:
 	docker-compose logs -f
@@ -82,7 +86,48 @@ test-fastapi: sync
 
 test-kafka:
 	@echo "Testing Kafka connectivity..."
-	@docker exec kafka kafka-console-producer.sh --broker-list localhost:9092 --topic test-topic < /dev/null && echo "✓ Kafka test passed" || echo "❌ Kafka test failed"
+	@docker exec kafka kafka-broker-api-versions.sh --bootstrap-server kafka:29092 > /dev/null 2>&1 && echo "✓ Kafka test passed" || echo "❌ Kafka test failed"
+
+kafka-health:
+	@echo "=== Kafka Container Health ==="
+	@docker inspect --format='{{json .State.Health}}' kafka | jq '.' || echo "❌ Cannot inspect kafka container"
+	@echo ""
+	@echo "=== Kafka Broker API Versions ==="
+	@docker exec kafka kafka-broker-api-versions.sh --bootstrap-server kafka:29092 | head -5 || echo "❌ Broker not responding"
+	@echo ""
+	@echo "=== Kafka Topics ==="
+	@docker exec kafka kafka-topics.sh --bootstrap-server kafka:29092 --list || echo "❌ Cannot list topics"
+
+kafka-topics:
+	@echo "Listing Kafka topics..."
+	@docker exec kafka kafka-topics.sh --bootstrap-server kafka:29092 --list
+
+kafka-consumer:
+	@echo "Consuming messages from fastapi-logs topic..."
+	@docker exec kafka kafka-console-consumer.sh --bootstrap-server kafka:29092 --topic fastapi-logs --from-beginning
+
+kafka-monitor:
+	@echo "Monitoring Kafka health & consumer lag (Ctrl+C to stop)..."
+	@while true; do \
+		clear; \
+		echo "=== Kafka Health Monitor ==="; \
+		echo "Time: $$(date '+%Y-%m-%d %H:%M:%S')"; \
+		echo ""; \
+		echo "--- Broker Status ---"; \
+		docker exec kafka kafka-broker-api-versions.sh --bootstrap-server kafka:29092 2>&1 | head -3 || echo "❌ Broker down"; \
+		echo ""; \
+		echo "--- Topics ---"; \
+		docker exec kafka kafka-topics.sh --bootstrap-server kafka:29092 --list 2>&1 || echo "❌ Cannot list topics"; \
+		echo ""; \
+		echo "--- Consumer Groups ---"; \
+		docker exec kafka kafka-consumer-groups.sh --bootstrap-server kafka:29092 --list 2>&1 || echo "❌ Cannot list consumer groups"; \
+		echo ""; \
+		echo "--- Logstash Consumer Lag ---"; \
+		docker exec kafka kafka-consumer-groups.sh --bootstrap-server kafka:29092 --describe --group logstash-group 2>&1 || echo "⚠️  No logstash-group yet"; \
+		echo ""; \
+		echo "(Refreshing every 10s, Ctrl+C to exit)"; \
+		sleep 10; \
+	done
 
 test-stack: up
 	@echo "Running full ELK stack tests..."
