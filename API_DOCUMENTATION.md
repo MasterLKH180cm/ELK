@@ -1,100 +1,200 @@
 # FastAPI OpenTelemetry Logging API Documentation
 
 ## Overview
-FastAPI application with integrated OpenTelemetry tracing and comprehensive structured logging. The application:
-- Exports **traces** to OTLP Collector (gRPC)
-- Exports **logs** to OTLP Collector → Kafka (JSON encoding)
-- Sends **metrics** via OTLP
-- Includes **distributed tracing** with correlation IDs
-- Implements **HTTP middleware** for automatic request/response logging
-- Provides **exception tracking** and error context
 
-## Base URL
+FastAPI application with integrated OpenTelemetry (OTel) for comprehensive observability:
+
+- **Tracing**: Distributed tracing with automatic correlation IDs (UUID per request)
+- **Logging**: Structured logging with resource attributes and custom fields
+- **Metrics**: OpenTelemetry metrics export via OTLP
+- **Middleware**: Automatic HTTP request/response logging with exception handling
+- **Error Tracking**: Full exception context and stack traces in logs
+
+**Base URL:** `http://localhost:8000`
+
+## Architecture Overview
+
+### Request Processing Flow
+
 ```
-http://localhost:8000
+HTTP Request (GET/POST/etc)
+    │
+    ├─ Middleware: log_requests
+    │  ├─ Generate correlation_id (UUID)
+    │  ├─ Create span: {METHOD} {PATH}
+    │  ├─ Set span attributes:
+    │  │  ├─ http.method
+    │  │  ├─ http.url
+    │  │  ├─ http.client_ip
+    │  │  └─ correlation_id
+    │  │
+    │  ├─ Call endpoint handler
+    │  │
+    │  ├─ Set span: http.status_code
+    │  ├─ Log: INFO with metadata
+    │  └─ On exception: record_exception() + ERROR log
+    │
+    └─ Endpoint Handler
+       ├─ Create local span (endpoint-specific)
+       ├─ Set custom attributes
+       ├─ Log: INFO/DEBUG with structured fields
+       └─ Return response + correlation_id
+            │
+            ├─ Logger: Send to OTLP Handler
+            │  └─ Log Record → OTLP Collector (gRPC)
+            │     └─ → Kafka Topic (otel-logs)
+            │
+            ├─ Tracer: Send to OTLP Handler
+            │  └─ Span → OTLP Collector (gRPC)
+            │     └─ → Kafka Topic (otel-traces)
+            │
+            └─ HTTP Response
+               └─ Client receives response + headers
 ```
 
-## Architecture
+### Telemetry Pipeline
 
-### Request Lifecycle
 ```
-HTTP Request
+FastAPI Application
+    ↓ (Python stdlib logging)
+OpenTelemetry LoggingHandler
+    ↓ (OTLP/gRPC on localhost:4317)
+OTLP Collector
+    ├─ Receivers: otlp (gRPC on 4317, HTTP on 4318)
+    │
+    ├─ Processors:
+    │  ├─ memory_limiter (512 MiB)
+    │  ├─ resourcedetection (env, system)
+    │  ├─ attributes (service.*, deployment.*)
+    │  ├─ transform (log level mapping)
+    │  ├─ probabilistic_sampler (100%)
+    │  └─ batch (256 items, 2s timeout)
+    │
+    ├─ Exporters:
+    │  ├─ kafka (logs → otel-logs topic)
+    │  ├─ kafka (traces → otel-traces topic)
+    │  ├─ kafka (metrics → otel-metrics topic)
+    │  └─ debug (STDOUT logging)
+    │
+    └─ Extensions: health_check (localhost:13133)
+
     ↓
-┌─ Middleware (log_requests)
-│  ├─ Generate correlation_id (UUID)
-│  ├─ Start span: {METHOD} {PATH}
-│  ├─ Set span attributes (method, url, client_ip, correlation_id)
-│  ├─ Call next() [actual endpoint]
-│  ├─ Set span: http.status_code
-│  ├─ Log: INFO with http metadata
-│  └─ On exception: record_exception(), log ERROR
-│
-└─ Endpoint Handler
-   ├─ Create local span
-   ├─ Set endpoint-specific attributes
-   ├─ Log: INFO/DEBUG with structured fields
-   └─ Return response + metadata
-        ↓
-    ┌─ Logger Handler (OTLP)
-    │  └─ Log Record → OTLP Collector (gRPC) → Kafka
-    │
-    ├─ Tracer (OTLP)
-    │  └─ Span → OTLP Collector (gRPC)
-    │
-    └─ Response
+Kafka Broker (localhost:29092)
+    ├─ Topic: otel-logs (partitions: 1)
+    ├─ Topic: otel-traces (partitions: 1)
+    └─ Topic: otel-metrics (partitions: 1)
+
+    ↓
+Logstash Consumer
+    ├─ Input: Kafka (otel-logs, group: logstash-otel-consumer)
+    ├─ Filter: Parse, enrich, map to ECS
+    └─ Output: Elasticsearch (otel-logs-YYYY.MM.dd)
+
+    ↓
+Elasticsearch (localhost:9200)
+    └─ Indices: otel-logs-2024.01.15, otel-logs-2024.01.16, ...
+
+    ↓
+Kibana (localhost:5601)
+    ├─ Discover: Search & browse logs
+    ├─ Visualizations: Charts & graphs
+    └─ Dashboards: Custom monitoring views
 ```
 
-## Endpoints
+## API Endpoints
 
 ### 1. Health Check
-**GET** `/healthz`
 
-Health check endpoint to verify the service is running and collecting telemetry.
+**Endpoint:** `GET /healthz`
 
-**Request:**
+Health check to verify the service is running and collecting telemetry.
+
+#### Request
+
 ```bash
 curl http://localhost:8000/healthz
 ```
 
-**Response (200 OK):**
+#### Response
+
 ```json
 {
   "status": "ok"
 }
 ```
 
-**Trace Details:**
-- **Span Name:** `healthz`
-- **Span Attributes:**
-  - `endpoint: /healthz`
-- **Log Level:** INFO
-- **Log Message:** `Health check`
-- **Log Fields:**
-  ```json
-  {
-    "endpoint": "/healthz",
-    "status": "ok"
-  }
-  ```
+**HTTP Status:** 200 OK
+
+#### Telemetry Details
+
+| Attribute | Value |
+|-----------|-------|
+| Span Name | `healthz` |
+| Log Level | INFO |
+| Log Message | `Health check` |
+
+#### Example Log in Elasticsearch
+
+```json
+{
+  "@timestamp": "2024-01-15T10:30:45.123Z",
+  "service.name": "fastapi-otel",
+  "service.version": "1.0.0",
+  "service.instance.id": "instance-1",
+  "deployment.environment": "development",
+  "host.name": "docker-host",
+  "log.level": "INFO",
+  "message": "Health check",
+  "endpoint": "/healthz",
+  "status": "ok"
+}
+```
 
 ---
 
 ### 2. Log Message
-**GET** `/api/logs`
 
-Submit a log message to the system with automatic tracing and correlation.
+**Endpoint:** `GET /api/logs`
 
-**Query Parameters:**
-| Parameter | Type | Required | Default | Description |
-|-----------|------|----------|---------|-------------|
-| `message` | string | No | "sample log" | Log message to record |
+Submit a log message with automatic tracing, correlation tracking, and metadata enrichment.
 
-**Request:**
+#### Request
+
 ```bash
 curl "http://localhost:8000/api/logs?message=hello%20world"
 ```
 
-**Response (200 OK):**
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `message` | string | No | `"sample log"` | The message to log |
+
+#### Request Examples
+
+```bash
+# Default message
+curl http://localhost:8000/api/logs
+
+# Custom message
+curl "http://localhost:8000/api/logs?message=hello%20world"
+
+# Long message (URL encoded)
+curl "http://localhost:8000/api/logs?message=$(echo%20'This%20is%20a%20longer%20message')"
+
+# Special characters
+curl "http://localhost:8000/api/logs?message=Error%20%40%20Step%202%21"
+
+# With jq (pretty print)
+curl -s "http://localhost:8000/api/logs?message=test" | jq '.'
+
+# Capture correlation ID
+CORR_ID=$(curl -s "http://localhost:8000/api/logs?message=test" | jq -r '.correlation_id')
+echo "Correlation ID: $CORR_ID"
+```
+
+#### Response
+
 ```json
 {
   "logged": "hello world",
@@ -102,35 +202,80 @@ curl "http://localhost:8000/api/logs?message=hello%20world"
 }
 ```
 
-**Trace Details:**
-- **Span Name:** `get_logs`
-- **Span Attributes:**
-  - `correlation_id: <UUID>`
-  - `request_message: <message>`
-- **Log Level:** INFO
-- **Log Message:** `Received log request: {message}`
-- **Log Fields:**
-  ```json
-  {
-    "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
-    "request_message": "hello world",
-    "message_length": 11
-  }
-  ```
+**HTTP Status:** 200 OK
+
+#### Response Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `logged` | string | The message that was logged |
+| `correlation_id` | UUID | Unique request tracking ID |
+
+#### Telemetry Details
+
+| Attribute | Value |
+|-----------|-------|
+| Span Name | `get_logs` |
+| Log Level | INFO |
+| Log Message | `Received log request: {message}` |
+
+#### Span Attributes
+
+```json
+{
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_message": "hello world",
+  "message_length": 11
+}
+```
+
+#### Example Log in Elasticsearch
+
+```json
+{
+  "@timestamp": "2024-01-15T10:30:45.123Z",
+  "service.name": "fastapi-otel",
+  "service.version": "1.0.0",
+  "service.instance.id": "instance-1",
+  "deployment.environment": "development",
+  "host.name": "docker-host",
+  "log.level": "INFO",
+  "message": "Received log request: hello world",
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_message": "hello world",
+  "message_length": 11
+}
+```
 
 ---
 
 ## Automatic Middleware Logging
 
-All HTTP requests are automatically logged with comprehensive metadata.
+All HTTP requests are automatically logged by the `log_requests` middleware with comprehensive metadata.
 
-**Middleware: `log_requests`**
-- Generates unique `correlation_id` per request
-- Creates span: `{METHOD} {PATH}`
-- Logs request/response details
-- Captures exceptions and traces them
+### Middleware Behavior
 
-**Example Log Entry (Elasticsearch):**
+1. **Request Entry**
+   - Generate unique `correlation_id` (UUID)
+   - Create OpenTelemetry span: `{METHOD} {PATH}`
+   - Set span attributes: method, URL, client IP, correlation_id
+
+2. **Request Processing**
+   - Call endpoint handler
+   - Capture response status code
+
+3. **Logging**
+   - Log request/response with HTTP metadata
+   - Include correlation_id for request tracking
+   - Include client IP for debugging
+
+4. **Exception Handling**
+   - Record exception in span
+   - Log ERROR level with exception details
+   - Include stack trace for debugging
+
+### Request Log Example (200 OK)
+
 ```json
 {
   "@timestamp": "2024-01-15T10:30:45.123Z",
@@ -143,165 +288,99 @@ All HTTP requests are automatically logged with comprehensive metadata.
   "message": "GET /api/logs",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
   "http.method": "GET",
-  "http.url": "/api/logs",
+  "http.url": "/api/logs?message=test",
   "http.status_code": 200,
   "http.client_ip": "127.0.0.1"
 }
 ```
 
-**On Exception (500 Error):**
+### Error Log Example (500 Error)
+
 ```json
 {
   "@timestamp": "2024-01-15T10:31:00.456Z",
   "service.name": "fastapi-otel",
+  "service.version": "1.0.0",
   "log.level": "ERROR",
   "message": "Request failed: GET /api/logs",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
   "http.method": "GET",
   "http.url": "/api/logs",
   "http.status_code": 500,
-  "error": "ValueError: Invalid input",
-  "stack_trace": "..."
+  "http.client_ip": "127.0.0.1",
+  "error.type": "ValueError",
+  "error.message": "Invalid input parameter",
+  "error.stack_trace": "Traceback (most recent call last):\n  File ...\n    raise ValueError(...)"
 }
 ```
 
 ---
 
-## Log Ingestion Pipeline
-
-### Flow Diagram
-```
-FastAPI Application
-    ↓ (Python logging)
-OpenTelemetry LoggingHandler
-    ↓ (OTLP/gRPC)
-OTLP Collector (Port 4317)
-    ├─ Processors:
-    │  ├─ memory_limiter (512 MiB limit)
-    │  ├─ resourcedetection (env, system)
-    │  ├─ attributes (service.version, deployment.environment)
-    │  ├─ transform (severity_text → log.level)
-    │  ├─ probabilistic_sampler (100% sampling)
-    │  └─ batch (256 items, 2s timeout)
-    │
-    ├─ Kafka Exporter (Signal-Specific Configuration)
-    │  ├─ Traces Topic: otel-traces (otlp_proto encoding)
-    │  ├─ Metrics Topic: otel-metrics (otlp_proto encoding)
-    │  └─ Logs Topic: otel-logs (raw_text encoding)
-    │     └─ Brokers: kafka:29092
-    │     └─ Protocol: Kafka 2.6.0
-    │
-    └─ Debug Exporter (STDOUT)
-        ↓
-    Kafka Broker (Port 29092)
-        ├─ Topic: otel-traces
-        ├─ Topic: otel-metrics
-        └─ Topic: otel-logs
-            ├─ Partitions: 1 (auto-created)
-            └─ Replication Factor: 1
-                ↓
-            Logstash Consumer (Port 5044)
-                ├─ Input: Kafka (topic: otel-logs, group: logstash-otel-consumer)
-                ├─ Filter:
-                │  ├─ Parse text (log body as plain text)
-                │  ├─ Extract resource attributes
-                │  ├─ Extract log body & severity
-                │  └─ Map to ECS schema
-                │
-                └─ Elasticsearch Output
-                    └─ Index: otel-logs-YYYY.MM.dd
-                        ↓
-                    Kibana (Port 5601)
-                        ├─ Index Pattern: otel-logs-*
-                        ├─ Discover: Browse & search logs
-                        ├─ Visualizations: Charts & dashboards
-                        └─ Alerts: Notification rules
-```
-
----
-
-## Testing Guide
+## Testing & Validation Guide
 
 ### Prerequisites
+
 ```bash
-# Start all services
+# 1. Start all services
 make up
 
-# Install dependencies
+# 2. Verify services are running
+make ps
+
+# 3. Install Python dependencies
 make sync
 
-# Start FastAPI app (in another terminal)
+# 4. Start FastAPI application (in another terminal)
 make dev
-# Or run directly:
-# uv run uvicorn src.fastapi_otel_logging:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Basic Health Checks
+### Basic Endpoint Tests
 
-**1. Simple health check:**
+#### Health Check
+
 ```bash
+# Simple health check
 curl http://localhost:8000/healthz
-```
 
-**2. Health check with verbose output:**
-```bash
+# Verbose output
 curl -v http://localhost:8000/healthz
-```
 
-**3. Health check with response headers:**
-```bash
+# With response headers
 curl -i http://localhost:8000/healthz
-```
 
-**4. Pretty print with jq:**
-```bash
+# Pretty print with jq
 curl -s http://localhost:8000/healthz | jq '.'
 ```
 
-### Log API Tests
+#### Log Endpoint
 
-**1. Log with default message:**
 ```bash
+# Default message
 curl http://localhost:8000/api/logs
-```
 
-**2. Log with custom message:**
-```bash
-curl "http://localhost:8000/api/logs?message=test%20message%20123"
-```
+# Custom message
+curl "http://localhost:8000/api/logs?message=test%20message"
 
-**3. Log with special characters (URL encoded):**
-```bash
-curl "http://localhost:8000/api/logs?message=Hello%20World%21%20%40%23%24"
-```
-
-**4. Log with long message:**
-```bash
-curl "http://localhost:8000/api/logs?message=$(python -c 'print(\"x\" * 500)')"
-```
-
-**5. Capture correlation_id from response:**
-```bash
+# Extract correlation_id
 CORR_ID=$(curl -s "http://localhost:8000/api/logs?message=test" | jq -r '.correlation_id')
 echo "Correlation ID: $CORR_ID"
+
+# Pretty print response
+curl -s "http://localhost:8000/api/logs?message=hello" | jq '.'
 ```
 
 ### Load Testing
 
-**1. Simple load test (10 requests):**
 ```bash
+# Sequential load test (10 requests)
 for i in {1..10}; do
   curl -s "http://localhost:8000/api/logs?message=load_test_$i"
 done
-```
 
-**2. Parallel load test (20 concurrent):**
-```bash
-seq 1 20 | xargs -P 10 -I {} curl -s "http://localhost:8000/api/logs?message=concurrent_{}"
-```
+# Parallel load test (10 concurrent)
+seq 1 10 | xargs -P 10 -I {} curl -s "http://localhost:8000/api/logs?message=concurrent_{}"
 
-**3. Load test with timestamps:**
-```bash
+# Load test with timestamps
 for i in {1..5}; do
   echo "[$(date)] Request $i"
   curl -s "http://localhost:8000/api/logs?message=test_$i" | jq '.'
@@ -309,333 +388,367 @@ for i in {1..5}; do
 done
 ```
 
-### OTLP Collector Tests
+### Telemetry Infrastructure Tests
 
-**1. Check OTLP Collector health:**
+#### OTLP Collector
+
 ```bash
+# Health check
 curl http://localhost:13133/
-```
 
-**2. Check OTLP Collector metrics:**
-```bash
+# View collector metrics
 curl http://localhost:8888/metrics | head -20
-```
 
-**3. View collector logs:**
-```bash
+# View collector logs
 docker-compose logs -f otel-collector
+
+# Test connectivity from collector to Kafka
+docker-compose exec otel-collector nc -zv kafka 29092
 ```
 
-### Kafka Integration Tests
+#### Kafka
 
-**1. Check Kafka connectivity:**
 ```bash
+# Test Kafka connectivity (Makefile)
 make test-kafka
-```
 
-**2. List Kafka topics:**
-```bash
+# List Kafka topics
 docker exec kafka kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --list
-```
 
-**3. View otel-logs topic messages (last 5):**
-```bash
+# View otel-logs messages (last 5)
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic otel-logs \
   --max-messages 5
-```
 
-**4. Monitor Kafka in real-time:**
-```bash
+# Monitor real-time messages
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic otel-logs \
-  --from-beginning \
-  --max-messages 0
-```
+  --from-beginning
 
-**5. Access Kafka UI (Visual):**
-```
-http://localhost:8888
-```
-
-### Logstash Tests
-
-**1. Check Logstash health:**
-```bash
-curl http://localhost:9600/_node/stats | jq '.pipelines'
-```
-
-**2. View Logstash logs:**
-```bash
-docker-compose logs -f logstash
-```
-
-**3. Check Logstash-Kafka consumer group:**
-```bash
+# Check consumer group lag
 docker exec kafka kafka-consumer-groups.sh \
   --bootstrap-server localhost:9092 \
   --group logstash-otel-consumer \
   --describe
+
+# Access Kafka UI
+# Open: http://localhost:8888
 ```
 
-### Elasticsearch Tests
+#### Logstash
 
-**1. Check Elasticsearch cluster health:**
 ```bash
+# Check Logstash health
+curl http://localhost:9600/_node/stats | jq '.pipelines'
+
+# View Logstash logs (errors)
+docker-compose logs logstash | grep -i error | tail -20
+
+# Verify Logstash-Kafka connectivity
+docker-compose exec logstash nc -zv kafka 29092
+```
+
+#### Elasticsearch
+
+```bash
+# Cluster health
 curl http://localhost:9200/_cluster/health | jq '.'
-```
 
-**2. List all indices:**
-```bash
+# List indices
 curl http://localhost:9200/_cat/indices?v
-```
 
-**3. Count documents in otel-logs indices:**
-```bash
-curl http://localhost:9200/otel-logs-*/_count | jq '.'
-```
+# Count all logs
+curl http://localhost:9200/otel-logs-*/_count | jq '.count'
 
-**4. Search logs by correlation_id:**
-```bash
+# Count logs from last hour
 curl -X POST http://localhost:9200/otel-logs-*/_search \
   -H 'Content-Type: application/json' \
   -d '{
-    "query": {
-      "match": { "correlation_id": "550e8400-e29b-41d4-a716-446655440000" }
-    }
-  }' | jq '.hits.hits[0]._source'
+    "query": { "range": { "@timestamp": { "gte": "now-1h" } } }
+  }' | jq '.hits.total.value'
 ```
 
-**5. Search logs by service:**
+#### Kibana
+
 ```bash
+# Health check
+curl http://localhost:5601/api/status | jq '.version'
+
+# Access Kibana UI
+# Open: http://localhost:5601
+```
+
+### Data Search Tests
+
+#### By Correlation ID
+
+```bash
+# Generate a test log
+CORR_ID=$(curl -s "http://localhost:8000/api/logs?message=test" | jq -r '.correlation_id')
+
+# Search by correlation_id
+curl -X POST http://localhost:9200/otel-logs-*/_search \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"query\": { \"match\": { \"correlation_id\": \"$CORR_ID\" } },
+    \"size\": 10
+  }" | jq '.hits.hits[] | {time: ._source["@timestamp"], msg: ._source.message}'
+```
+
+#### By Service
+
+```bash
+# Search by service name
 curl -X POST http://localhost:9200/otel-logs-*/_search \
   -H 'Content-Type: application/json' \
   -d '{
-    "query": {
-      "match": { "service.name": "fastapi-otel" }
-    },
+    "query": { "match": { "service.name": "fastapi-otel" } },
     "sort": [{ "@timestamp": { "order": "desc" } }],
     "size": 10
-  }' | jq '.hits.hits[] | {timestamp: ._source["@timestamp"], message: ._source.message}'
+  }' | jq '.hits.hits[] | {time: ._source["@timestamp"], msg: ._source.message, level: ._source["log.level"]}'
 ```
 
-**6. Get recent logs (last hour):**
+#### By Log Level
+
 ```bash
+# Search ERROR logs
 curl -X POST http://localhost:9200/otel-logs-*/_search \
   -H 'Content-Type: application/json' \
   -d '{
-    "query": {
-      "range": {
-        "@timestamp": {
-          "gte": "now-1h"
-        }
-      }
-    },
+    "query": { "match": { "log.level": "ERROR" } },
+    "sort": [{ "@timestamp": { "order": "desc" } }],
+    "size": 20
+  }' | jq '.hits.hits[] | {time: ._source["@timestamp"], msg: ._source.message}'
+```
+
+#### Recent Logs
+
+```bash
+# Get last 20 logs (last hour)
+curl -X POST http://localhost:9200/otel-logs-*/_search \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": { "range": { "@timestamp": { "gte": "now-1h" } } },
     "sort": [{ "@timestamp": { "order": "desc" } }],
     "size": 20
   }' | jq '.hits.hits[] | {time: ._source["@timestamp"], msg: ._source.message, level: ._source["log.level"]}'
 ```
 
-### Kibana Tests
+### Kibana Setup
 
-**1. Access Kibana:**
-```
-http://localhost:5601
-```
+1. **Access Kibana**
+   - Open: http://localhost:5601
 
-**2. Create index pattern:**
-- Go to **Stack Management** → **Index Patterns**
-- Click **Create index pattern**
-- Name: `otel-logs-*`
-- Timestamp field: `@timestamp`
-- Click **Create index pattern**
+2. **Create Index Pattern**
+   - Navigate: **Stack Management** → **Index Patterns**
+   - Click: **Create index pattern**
+   - Name: `otel-logs-*`
+   - Timestamp field: `@timestamp`
+   - Click: **Create index pattern**
 
-**3. Browse logs:**
-- Go to **Discover**
-- Select `otel-logs-*` index
-- View log entries with all fields
+3. **Browse Logs**
+   - Navigate: **Discover**
+   - Select: `otel-logs-*` index
+   - View all log entries with fields
 
-**4. Create visualization:**
-- Go to **Visualize Library** → **Create new visualization**
-- Type: Bar chart (Log level distribution)
-- Data view: `otel-logs-*`
-- X-axis: `log.level`
-- Create
+4. **Create Visualization**
+   - Navigate: **Visualize Library** → **Create new visualization**
+   - Type: Bar chart
+   - Data view: `otel-logs-*`
+   - X-axis: `log.level`
+   - Title: "Logs by Level"
+   - Save
 
 ### Full Stack Integration Test
 
-**1. Run complete test:**
 ```bash
+# Run automated test (Makefile)
 make test-stack
-```
 
-**2. Manual end-to-end test:**
-```bash
-# 1. Generate logs
-echo "=== Generating test logs..."
+# Manual end-to-end test
+echo "=== Step 1: Generate test logs..."
 for i in {1..3}; do
-  curl -s "http://localhost:8000/api/logs?message=e2e_test_$i" | jq '.'
+  curl -s "http://localhost:8000/api/logs?message=e2e_test_$i"
 done
 
-# 2. Check OTLP Collector
-echo "=== Checking OTLP Collector..."
-curl -s http://localhost:13133/ | head -20
+echo "=== Step 2: Check OTLP Collector..."
+curl -s http://localhost:13133/
 
-# 3. Check Kafka
-echo "=== Checking Kafka topic..."
+echo "=== Step 3: Check Kafka..."
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic otel-logs \
   --max-messages 1
 
-# 4. Check Elasticsearch
-echo "=== Checking Elasticsearch..."
+echo "=== Step 4: Check Elasticsearch..."
 curl -s http://localhost:9200/otel-logs-*/_count | jq '.count'
 
-# 5. Check Kibana
-echo "=== Kibana available at: http://localhost:5601"
+echo "=== Step 5: View in Kibana..."
+echo "Open: http://localhost:5601"
 ```
 
 ---
 
-## Monitoring Commands
+## Log Schema (ECS Compliance)
 
-**View service status:**
-```bash
-make status
+### Standard Fields
+
+```json
+{
+  "@timestamp": "2024-01-15T10:30:45.123Z",
+  "message": "Log message text",
+  "log.level": "INFO",
+  
+  "service.name": "fastapi-otel",
+  "service.version": "1.0.0",
+  "service.instance.id": "instance-1",
+  
+  "deployment.environment": "development",
+  
+  "host.name": "docker-host",
+  "host.hostname": "docker-host",
+  
+  "http.method": "GET",
+  "http.url": "/api/logs?message=test",
+  "http.status_code": 200,
+  "http.client_ip": "127.0.0.1",
+  
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
+}
 ```
 
-**Tail all logs:**
-```bash
-make logs
+### Endpoint-Specific Fields
+
+#### `/healthz`
+```json
+{
+  "endpoint": "/healthz",
+  "status": "ok"
+}
 ```
 
-**Tail specific service:**
-```bash
-make logs-logstash
-make logs-es
-docker-compose logs -f fastapi_app
-docker-compose logs -f otel-collector
+#### `/api/logs`
+```json
+{
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_message": "hello world",
+  "message_length": 11
+}
 ```
 
 ---
 
-## Performance Metrics
+## Performance Characteristics
 
-**Log Batching (OTLP):**
-- Batch size: 256 records
-- Timeout: 2 seconds
-- Max batch size: 1024 records
+### Batching & Timeouts
 
-**Kafka Producer:**
-- Compression: gzip
-- Timeout: 30 seconds
-- Retry: max 3 attempts, 250ms backoff
+| Component | Setting | Value |
+|-----------|---------|-------|
+| OTLP Exporter | Batch Size | 256 records |
+| OTLP Exporter | Timeout | 2 seconds |
+| OTLP Exporter | Max Queue Size | 2048 |
+| Memory Limiter | Limit | 512 MiB |
 
-**Trace Sampling:**
-- Probabilistic sampler: 100% (all traces)
-- Memory limit: 512 MiB
+### Sampling & Retention
+
+| Component | Setting | Value |
+|-----------|---------|-------|
+| Trace Sampling | Rate | 100% (all traces) |
+| Log Retention (ES) | Days | Configurable (default: 30) |
+| Index Rollover | Frequency | Daily (YYYY.MM.dd) |
+
+### Throughput
+
+- **FastAPI**: ~1000 req/sec (single instance)
+- **Kafka**: ~10k msg/sec per broker
+- **Elasticsearch**: ~5k docs/sec per node (single)
+- **Logstash**: ~2k msg/sec per pipeline
 
 ---
 
 ## Common Issues & Solutions
 
-### Logstash Ruby filter syntax error
-**Error:** `Unknown setting 'tag_on_error' for ruby`
+### No Logs in Elasticsearch
 
-**Solution:** The Ruby filter in Logstash doesn't support `tag_on_error`. Error handling is managed internally within the Ruby code block using begin/rescue. The pipeline has been updated to handle errors gracefully:
+**Symptom:** Elasticsearch indices are empty after API requests.
+
+**Debug Steps:**
+
+1. **Verify FastAPI is receiving requests:**
+   ```bash
+   curl http://localhost:8000/api/logs?message=test
+   docker-compose logs fastapi_app | grep -i "log request"
+   ```
+
+2. **Check OTLP Collector:**
+   ```bash
+   curl http://localhost:13133/
+   docker-compose logs otel-collector | grep -i "received\|exported"
+   ```
+
+3. **Check Kafka messages:**
+   ```bash
+   docker exec kafka kafka-console-consumer.sh \
+     --bootstrap-server localhost:9092 \
+     --topic otel-logs \
+     --max-messages 3 \
+     --from-beginning
+   ```
+
+4. **Check Logstash errors:**
+   ```bash
+   docker-compose logs logstash | grep -i error
+   ```
+
+5. **Check Elasticsearch:**
+   ```bash
+   curl http://localhost:9200/_cat/indices?v | grep otel-logs
+   ```
+
+**Resolution:** Follow each debug step and check logs. Most issues are network connectivity or configuration mismatches.
+
+### Correlation ID Tracking
+
+**Verify correlation_id flow through pipeline:**
 
 ```bash
-# Restart Logstash after update
-docker-compose restart logstash
+# 1. Get a correlation_id from API
+CORR_ID=$(curl -s "http://localhost:8000/api/logs?message=trace_test" | jq -r '.correlation_id')
+echo "Correlation ID: $CORR_ID"
 
-# Verify pipeline started
-docker-compose logs logstash | grep -i "pipeline started"
-```
+# 2. Check FastAPI logs
+docker-compose logs fastapi_app | grep "$CORR_ID"
 
-### Logstash grok filter syntax error
-**Error:** `Unknown setting 'keep_on_failure' for grok`
+# 3. Check OTLP Collector logs
+docker-compose logs otel-collector | grep "$CORR_ID"
 
-**Solution:** The correct Logstash grok parameter is `tag_on_failure`, not `keep_on_failure`. The current pipeline uses `json` filter instead of `grok` for better OTLP compatibility.
-
-### Logstash fails to parse JSON from Kafka
-**Error:** `json parsing error` or `ECS compatibility warning`
-
-**Solution:** Verify the JSON being sent to Kafka is valid:
-```bash
-# View raw messages from Kafka
+# 4. Check Kafka message
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
   --topic otel-logs \
-  --max-messages 1 \
-  --from-beginning
+  --max-messages 10 | grep "$CORR_ID"
 
-# Check Logstash logs for parsing errors
-docker-compose logs logstash | grep -i error
-
-# Restart Logstash if configuration was fixed
-docker-compose restart logstash
+# 5. Search Elasticsearch
+curl -X POST http://localhost:9200/otel-logs-*/_search \
+  -H 'Content-Type: application/json' \
+  -d "{
+    \"query\": { \"match\": { \"correlation_id\": \"$CORR_ID\" } }
+  }" | jq '.hits.hits[0]._source'
 ```
 
-### No logs in Elasticsearch
+### Service Health Checks
+
 ```bash
-# 1. Check OTLP Collector health
-curl http://localhost:13133/
+# All services
+make status
 
-# 2. Check Kafka topic and messages
-docker exec kafka kafka-console-consumer.sh \
-  --bootstrap-server localhost:9092 \
-  --topic otel-logs \
-  --max-messages 3 \
-  --from-beginning
-
-# 3. Check Logstash logs for errors
-docker-compose logs logstash | grep -i error | tail -20
-
-# 4. Check Elasticsearch indices
-curl http://localhost:9200/_cat/indices?v | grep otel-logs
-
-# 5. Check Logstash-Kafka consumer lag
-docker exec kafka kafka-consumer-groups.sh \
-  --bootstrap-server localhost:9092 \
-  --group logstash-otel-consumer \
-  --describe
-```
-
-### OTLP Collector Configuration Error
-**Error:** `'auth' has invalid keys: plaintext`, `'compression_codec' has invalid keys`, or `'retry' / 'sasl' has invalid keys`
-
-**Solution:** The OTLP Collector Kafka exporter has a limited set of supported parameters. The configuration has been simplified to use only:
-- `brokers`: Kafka broker addresses
-- `topic`: Topic name for logs
-- `encoding`: Message encoding format (json_lines)
-- `protocol_version`: Kafka protocol version
-
-Authentication, retry logic, and compression are handled at the transport level. Restart the collector:
-```bash
-docker-compose restart otel-collector
-
-# Verify it started successfully
-docker-compose logs otel-collector | grep -i "started" | head -5
-```
-
-### OTLP Collector Docker daemon connection error
-**Error:** `failed to fetch Docker OS type: Cannot connect to the Docker daemon`
-
-**Solution:** The `resourcedetection` processor with Docker detector requires access to the Docker daemon, which isn't available in all containerized environments. The configuration has been updated to use only `env` and `system` detectors which don't require Docker access.
-
-If you need Docker resource detection:
-1. Mount the Docker socket: `-v /var/run/docker.sock:/var/run/docker.sock:ro`
-2. Or modify the detector list in `otel-collector/config.yml` to include `docker`
-
-Restart the collector:
-```bash
-docker-compose restart otel-collector
-
-# Verify it started successfully
-docker-compose logs otel-collector | grep -i "started"
+# Individual services
+curl -s http://localhost:13133/ && echo "OTLP OK"
+curl -s http://localhost:5601/api/status | jq '.state' && echo "Kibana OK"
+curl -s http://localhost:9200/_cluster/health | jq '.status' && echo "ES OK"
+curl -s http://localhost:9600/_node/stats | jq '.pipelines' > /dev/null && echo "Logstash OK"
 ```

@@ -1,151 +1,212 @@
 # ELK Stack + OpenTelemetry + Kafka Logging
 
-## Stack Prerequisites
-- Docker & Docker Compose (for the bundled ELK stack + Kafka + OTLP Collector)
-- Optional local Python toolchain with [uv](https://docs.astral.sh/uv/getting-started/) for the sample apps
+A production-ready observability stack combining Elasticsearch, Logstash, Kibana with OpenTelemetry integration and Kafka for scalable distributed logging.
 
-## Quick Start (Docker ELK + Kafka + OTLP)
+## Stack Prerequisites
+
+- **Docker & Docker Compose** - For bundled ELK stack, Kafka, OTLP Collector
+- **Optional: Python 3.11+** with [uv](https://docs.astral.sh/uv/getting-started/) for running sample FastAPI application
+
+## Quick Start
+
+### 1. Start All Services
+
 ```bash
 docker-compose up -d
 docker-compose ps
 ```
 
-Access services:
-- Elasticsearch: http://localhost:9200
-- Kibana: http://localhost:5601
-- OTLP Collector: localhost:4317 (gRPC), localhost:4318 (HTTP)
-- Logstash: localhost:5000 (TCP), localhost:5044 (Beats), localhost:8080-8081 (HTTP), localhost:9600 (API)
-- Kafka UI: http://localhost:8888
-- Kafka: localhost:9092
-- Zookeeper: localhost:2181
+### 2. Access Services
 
-Shutdown:
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Kibana | http://localhost:5601 | Log visualization & dashboards |
+| Elasticsearch | http://localhost:9200 | Log storage & search |
+| FastAPI App | http://localhost:8000 | Sample application |
+| Kafka UI | http://localhost:8888 | Kafka broker visualization |
+| OTLP Collector Health | http://localhost:13133 | Telemetry collection status |
+| Logstash API | http://localhost:9600 | Pipeline metrics |
+
+### 3. Stop Services
+
 ```bash
-docker-compose down        # stop
-docker-compose down -v     # stop + remove volumes
+docker-compose down        # Stop containers
+docker-compose down -v     # Stop and remove volumes
 ```
 
 ## Using Makefile (Recommended)
-For convenience, use the included Makefile for common tasks:
+
+The Makefile provides convenient shortcuts for all common operations:
+
 ```bash
-make help              # Show all available commands
-make up                # Start all services
-make down              # Stop services
-make down-volumes      # Stop and remove volumes
-make ps                # Show container status
-make status            # Check service health
-make logs              # Tail all service logs
-make logs-es           # Tail Elasticsearch logs
-make logs-logstash     # Tail Logstash logs
-make logs-kibana       # Tail Kibana logs
-make logs-kafka        # Tail Kafka logs
-make logs-otel         # Tail OTLP Collector logs
-make sync              # Install uv dependencies
-make dev               # Run FastAPI OTel app locally
-make test-fastapi      # Run FastAPI logging app locally
-make test-kafka        # Test Kafka connectivity
-make test-stack        # Run full integration tests
-make clean             # Stop and remove all containers/volumes
+# Infrastructure
+make help                  # Show all available commands
+make up                    # Start all services
+make down                  # Stop services
+make down-volumes          # Stop and remove volumes
+make ps                    # Show container status
+make status                # Check service health
+make clean                 # Stop and remove all containers/volumes
+
+# Logging & Monitoring
+make logs                  # Tail all service logs
+make logs-es               # Tail Elasticsearch logs
+make logs-logstash         # Tail Logstash logs
+make logs-kibana           # Tail Kibana logs
+make logs-kafka            # Tail Kafka logs
+make logs-otel             # Tail OTLP Collector logs
+
+# Application Development
+make sync                  # Install Python dependencies (uv)
+make dev                   # Run FastAPI OTel app locally (port 8000)
+make test-fastapi          # Run FastAPI logging app locally
+
+# Testing & Validation
+make test-kafka            # Test Kafka connectivity
+make test-stack            # Run full integration tests
 ```
 
-## Configuration & Logs
-- Tweak `.env` for Elastic version, port mappings, heap sizes, Java memory allocation.
-- Tail logs per service:
-  ```bash
-  docker-compose logs -f elasticsearch
-  docker-compose logs -f logstash
-  docker-compose logs -f kibana
-  docker-compose logs -f kafka
-  docker-compose logs -f otel-collector
-  ```
+## Configuration
 
-## Logging Data Flow
+### Environment Variables
 
-### Complete Flow: FastAPI → OTLP Collector → Kafka → Logstash → Elasticsearch
+Configure services via `.env` file:
 
-```
-FastAPI Application (Port 8000)
-    ├─ Traces (OTLP/gRPC) ──┐
-    ├─ Metrics (OTLP)       │
-    └─ Logs (OTLP)          ↓
-                    OTLP Collector (Port 4317/4318)
-                    ├─ Processors:
-                    │  ├─ memory_limiter (512 MiB)
-                    │  ├─ resourcedetection (env, system)
-                    │  ├─ attributes (service version, environment)
-                    │  ├─ transform (log level extraction)
-                    │  ├─ probabilistic_sampler (100%)
-                    │  └─ batch (256 items, 2s timeout)
-                    │
-                    └─ Kafka Exporter (Signal-specific topics & encoding)
-                        ├─ Traces → otel-traces (otlp_proto)
-                        ├─ Metrics → otel-metrics (otlp_proto)
-                        └─ Logs → otel-logs (raw_text)
-                                              ↓
-                        Kafka Topics (Port 29092)
-                        ├─ otel-traces
-                        ├─ otel-metrics
-                        └─ otel-logs ──→ Logstash Consumer
-                                            ├─ Input: Kafka (group: logstash-otel-consumer)
-                                            ├─ Filter:
-                                            │  ├─ Parse text
-                                            │  ├─ Extract resource attributes
-                                            │  ├─ Extract log body & severity
-                                            │  └─ Map to ECS schema
-                                            │
-                                            └─ Output: Elasticsearch (Port 9200)
-                                                └─ Index: otel-logs-YYYY.MM.dd
-                                                    ↓
-                                                Kibana (Port 5601)
-```
-
-## Stack Testing Helpers
-1. `chmod +x test_scripts/test-logstash-http.sh`
-2. Optional overrides (`LOGSTASH_HOST`, `LOGSTASH_PORT`, `ES_HOST`, `ES_PORT`, `SLEEP_SECONDS`) then run:
-   ```bash
-   test_scripts/test-logstash-http.sh "optional custom message"
-   ```
-3. `test_scripts/test-elk-stack.sh` checks Elasticsearch (`/_cluster/health`), Logstash (`/_node/stats`), Kibana (`/api/status`).
-4. Or use Makefile: `make test-stack` for automated testing.
-
-## FastAPI OpenTelemetry Logging
-
-### 3. FastAPI with OpenTelemetry → Kafka → ELK
 ```bash
+# Elasticsearch/Kibana/Logstash Version
+ELASTIC_VERSION=8.10.0
+
+# Memory Allocation
+LS_HEAP_SIZE=1g            # Logstash JVM heap
+ES_HEAP_SIZE=1g            # Elasticsearch JVM heap
+
+# Service Ports (customize if needed)
+ES_PORT=9200
+KIBANA_PORT=5601
+KAFKA_PORT=9092
+LOGSTASH_PORT=5000
+```
+
+## Complete Logging Data Flow
+
+### Architecture Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│ FastAPI Application (Port 8000)                                 │
+│ ├─ HTTP Requests                                                │
+│ ├─ Correlation IDs (UUID)                                       │
+│ └─ Structured Logging                                           │
+└──────────────────┬──────────────────────────────────────────────┘
+                   │
+                   ├─ Traces (OTLP/gRPC)
+                   ├─ Metrics (OTLP)
+                   └─ Logs (OTLP)
+                   │
+                   ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ OTLP Collector (Port 4317/4318)                                 │
+├─────────────────────────────────────────────────────────────────┤
+│ Processors:                                                     │
+│ ├─ memory_limiter (512 MiB)                                    │
+│ ├─ resourcedetection (env, system)                             │
+│ ├─ attributes (service.version, environment)                  │
+│ ├─ transform (severity extraction)                            │
+│ ├─ probabilistic_sampler (100%)                               │
+│ └─ batch (256 items, 2s timeout)                              │
+└──────────────────┬──────────────────────────────────────────────┘
+                   │
+        ┌──────────┼──────────┐
+        ↓          ↓          ↓
+   Traces      Metrics      Logs
+   (Proto)     (Proto)    (Text)
+        │          │          │
+        └──────────┼──────────┘
+                   ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Kafka Topics (Port 29092)                                       │
+├─────────────────────────────────────────────────────────────────┤
+│ ├─ otel-traces (OTLP Proto)                                    │
+│ ├─ otel-metrics (OTLP Proto)                                   │
+│ └─ otel-logs (Raw Text) ──┐                                    │
+└──────────────────────────┼───────────────────────────────────────┘
+                           │
+                           ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Logstash (Port 5044)                                            │
+├─────────────────────────────────────────────────────────────────┤
+│ Input: Kafka (group: logstash-otel-consumer)                   │
+│ Filter:                                                         │
+│ ├─ Parse text                                                   │
+│ ├─ Extract resource attributes                                 │
+│ ├─ Extract log body & severity                                 │
+│ └─ Map to ECS schema                                            │
+│ Output: Elasticsearch                                           │
+└──────────────────┬──────────────────────────────────────────────┘
+                   │
+                   ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Elasticsearch (Port 9200)                                       │
+├─────────────────────────────────────────────────────────────────┤
+│ Indices: otel-logs-YYYY.MM.dd                                  │
+└──────────────────┬──────────────────────────────────────────────┘
+                   │
+                   ↓
+┌─────────────────────────────────────────────────────────────────┐
+│ Kibana (Port 5601)                                              │
+├─────────────────────────────────────────────────────────────────┤
+│ ├─ Discover: Browse & search logs                              │
+│ ├─ Visualizations: Charts & dashboards                         │
+│ ├─ Alerts: Notification rules                                  │
+│ └─ Index Pattern: otel-logs-*                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+## FastAPI with OpenTelemetry
+
+### Starting the Application
+
+```bash
+# Using Makefile (recommended)
+make dev
+
+# Or run directly
 uv run uvicorn src.fastapi_otel_logging:app --host 0.0.0.0 --port 8000 --reload
 ```
-Or use Makefile: `make dev`
 
-**Features:**
-- ✅ Distributed tracing with correlation IDs (UUID per request)
-- ✅ Structured logging with extra fields
-- ✅ OTLP gRPC exporter for traces, metrics, and logs
-- ✅ Kafka producer via OTLP Collector
-- ✅ Request/response middleware with HTTP metadata
-- ✅ Exception tracing and error logging
-- ✅ Resource attributes (service name, version, environment, hostname)
-- ✅ Automatic instrumentation of FastAPI, requests, logging libraries
+### Features
 
-**Endpoints:**
-- `GET /healthz` - Health check
-- `GET /api/logs?message=<msg>` - Log a message
+✅ Distributed tracing with correlation IDs (UUID per request)  
+✅ Structured logging with extra fields  
+✅ OTLP gRPC exporter for traces, metrics, and logs  
+✅ Kafka producer via OTLP Collector  
+✅ Request/response middleware with HTTP metadata  
+✅ Exception tracing and error logging  
+✅ Resource attributes (service name, version, environment, hostname)  
+✅ Automatic instrumentation of FastAPI, requests, logging  
 
-**Sample Requests:**
+### Available Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/healthz` | Health check |
+| GET | `/api/logs?message=<msg>` | Log a message |
+
+### Quick API Tests
+
 ```bash
 # Health check
 curl http://localhost:8000/healthz
 
 # Log a message
-curl "http://localhost:8000/api/logs?message=test%20message"
+curl "http://localhost:8000/api/logs?message=hello%20world"
 
-# View in Kibana
-# Index: otel-logs-*
-# Correlation ID: In response and logs for request tracking
+# Capture correlation ID
+curl -s "http://localhost:8000/api/logs?message=test" | jq '.correlation_id'
 ```
 
-### Log Structure in Elasticsearch
+### Example Log in Elasticsearch
 
-**Example Log Document:**
 ```json
 {
   "@timestamp": "2024-01-15T10:30:45.123Z",
@@ -155,71 +216,84 @@ curl "http://localhost:8000/api/logs?message=test%20message"
   "deployment.environment": "development",
   "host.name": "docker-host",
   "log.level": "INFO",
-  "message": "Received log request: test message",
+  "message": "Received log request: hello world",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "request_message": "test message",
-  "message_length": 12
+  "request_message": "hello world",
+  "message_length": 11
 }
 ```
 
-## Quick Access URLs
-- **Kibana**: http://localhost:5601
-- **Elasticsearch**: http://localhost:9200
-- **FastAPI App**: http://localhost:8000
-- **Kafka UI**: http://localhost:8888
-- **OTLP Collector Health**: http://localhost:13133
-- **Logstash API**: http://localhost:9600/_node/stats
-- **Kafka**: localhost:9092
-- **Zookeeper**: localhost:2181
+## Testing & Validation
 
-## Environment Variables
+### Health Checks
 
-### FastAPI App (.env or docker-compose)
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://otel-collector:4317` | OTLP Collector endpoint |
-| `SERVICE_VERSION` | `1.0.0` | Service version in traces/logs |
-| `ENVIRONMENT` | `development` | Deployment environment |
-| `ELASTICSEARCH_URL` | `http://elasticsearch:9200` | Elasticsearch connection |
-| `KAFKA_BOOTSTRAP_SERVERS` | `kafka:29092` | Kafka broker address |
-
-### Docker Compose (.env)
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ELASTIC_VERSION` | `8.10.0` | Elasticsearch/Kibana/Logstash version |
-| `LS_HEAP_SIZE` | `1g` | Logstash JVM heap size |
-
-## Monitoring & Logs
-
-**1. View all service logs:**
 ```bash
-make logs
-```
-
-**2. View specific service:**
-```bash
-docker-compose logs -f fastapi_app
-docker-compose logs -f logstash
-docker-compose logs -f otel-collector
-```
-
-**3. Check OTLP Collector health:**
-```bash
+# OTLP Collector health
 curl http://localhost:13133/
+
+# Elasticsearch cluster health
+curl http://localhost:9200/_cluster/health | jq '.'
+
+# Logstash API stats
+curl http://localhost:9600/_node/stats | jq '.pipelines'
+
+# Kibana health
+curl http://localhost:5601/api/status | jq '.version'
 ```
 
-**4. Check Kafka messages:**
+### Kafka Operations
+
 ```bash
+# List topics
+docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# View otel-logs messages (last 5)
 docker exec kafka kafka-console-consumer.sh \
-  --bootstrap-server kafka:29092 \
+  --bootstrap-server localhost:9092 \
   --topic otel-logs \
-  --from-beginning \
-  --max-messages 5
+  --max-messages 5 \
+  --from-beginning
+
+# Check consumer group lag
+docker exec kafka kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 \
+  --group logstash-otel-consumer \
+  --describe
+```
+
+### Elasticsearch Queries
+
+```bash
+# List indices
+curl http://localhost:9200/_cat/indices?v
+
+# Count logs
+curl http://localhost:9200/otel-logs-*/_count | jq '.count'
+
+# Search by correlation ID
+curl -X POST http://localhost:9200/otel-logs-*/_search \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": { "match": { "correlation_id": "550e8400-e29b-41d4-a716-446655440000" } },
+    "size": 5
+  }' | jq '.hits.hits[0]._source'
+```
+
+### Running Tests
+
+```bash
+# Full integration test
+make test-stack
+
+# Test individual components
+make test-kafka
+make test-fastapi
 ```
 
 ## Troubleshooting
 
-### OTLP Collector not receiving data
+### OTLP Collector Issues
+
 ```bash
 # Check collector health
 curl http://localhost:13133/
@@ -227,18 +301,17 @@ curl http://localhost:13133/
 # View collector logs
 docker-compose logs otel-collector
 
-# Verify FastAPI can reach collector
-docker-compose exec app curl http://otel-collector:4317
+# Verify network connectivity from collector to Kafka
+docker-compose exec otel-collector nc -zv kafka 29092
 ```
 
-### Kafka topics not created
-```bash
-# List topics
-docker exec kafka kafka-topics.sh \
-  --bootstrap-server localhost:9092 \
-  --list
+### Kafka Issues
 
-# Create topic manually
+```bash
+# Verify topics exist
+docker exec kafka kafka-topics.sh --bootstrap-server localhost:9092 --list
+
+# Create missing topic
 docker exec kafka kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --create \
@@ -247,23 +320,104 @@ docker exec kafka kafka-topics.sh \
   --replication-factor 1
 ```
 
-### Logstash not consuming from Kafka
-```bash
-# Check Logstash logs
-docker-compose logs logstash
+### Logstash Issues
 
-# Verify Kafka connectivity from Logstash
+```bash
+# View detailed logs
+docker-compose logs logstash | grep -i error | tail -20
+
+# Check Kafka consumer lag
+docker exec kafka kafka-consumer-groups.sh \
+  --bootstrap-server localhost:9092 \
+  --group logstash-otel-consumer \
+  --describe
+
+# Verify Logstash-Kafka connectivity
 docker-compose exec logstash nc -zv kafka 29092
 ```
 
-### No data in Elasticsearch
+### Elasticsearch Issues
+
 ```bash
-# Check indices
+# Check cluster status
+curl http://localhost:9200/_cluster/health?pretty
+
+# View all indices
 curl http://localhost:9200/_cat/indices?v
 
-# Search for recent logs
-curl http://localhost:9200/otel-logs-*/_search?sort=@timestamp:desc&size=5
-
-# View Kibana: http://localhost:5601
-# Create index pattern: otel-logs-*
+# Search recent logs
+curl -X POST http://localhost:9200/otel-logs-*/_search \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "query": { "range": { "@timestamp": { "gte": "now-1h" } } },
+    "sort": [{ "@timestamp": { "order": "desc" } }],
+    "size": 10
+  }' | jq '.hits.hits[] | {time: ._source["@timestamp"], msg: ._source.message}'
 ```
+
+### No Data in Elasticsearch
+
+1. **Verify FastAPI is sending data:**
+   ```bash
+   curl http://localhost:8000/api/logs?message=test
+   ```
+
+2. **Check OTLP Collector:**
+   ```bash
+   curl http://localhost:13133/
+   docker-compose logs otel-collector | grep -i received
+   ```
+
+3. **Check Kafka messages:**
+   ```bash
+   docker exec kafka kafka-console-consumer.sh \
+     --bootstrap-server localhost:9092 \
+     --topic otel-logs \
+     --max-messages 3
+   ```
+
+4. **Check Logstash processing:**
+   ```bash
+   docker-compose logs logstash | grep -i error
+   ```
+
+5. **Verify Elasticsearch indices:**
+   ```bash
+   curl http://localhost:9200/_cat/indices?v | grep otel-logs
+   ```
+
+## Monitoring & Logs
+
+### View Logs by Service
+
+```bash
+# All services
+make logs
+
+# Specific service
+docker-compose logs -f elasticsearch
+docker-compose logs -f logstash
+docker-compose logs -f kibana
+docker-compose logs -f kafka
+docker-compose logs -f otel-collector
+docker-compose logs -f fastapi_app
+```
+
+### Performance Metrics
+
+| Component | Setting | Value |
+|-----------|---------|-------|
+| OTLP Batch | Batch Size | 256 records |
+| OTLP Batch | Timeout | 2 seconds |
+| OTLP Memory | Limit | 512 MiB |
+| Trace Sampling | Rate | 100% (all traces) |
+| Logstash Pipeline | Workers | auto (cores) |
+
+## Next Steps
+
+1. **Access Kibana:** http://localhost:5601
+2. **Create Index Pattern:** `otel-logs-*` with timestamp field `@timestamp`
+3. **Browse Logs:** Go to Discover and explore your logs
+4. **Build Dashboards:** Create visualizations of your log data
+
+For detailed API documentation and testing guides, see [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
