@@ -1,5 +1,7 @@
 import logging
 import os
+import uuid
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, Request
@@ -29,7 +31,7 @@ logger_provider = LoggerProvider(
     resource=Resource.create(
         {
             "service.name": "fastapi-otel",
-            "service.instance.id": "instance-1",
+            "service.instance.id": os.getenv("HOSTNAME", "instance-1"),
             "service.version": os.getenv("SERVICE_VERSION", "1.0.0"),
             "deployment.environment": os.getenv("ENVIRONMENT", "development"),
             "host.name": os.getenv("HOSTNAME", "unknown"),
@@ -46,7 +48,6 @@ logging.getLogger().setLevel(logging.INFO)
 logging.getLogger().addHandler(handler)
 
 # Instrument libraries
-FastAPIInstrumentor.instrument_app(app := FastAPI())
 RequestsInstrumentor().instrument()
 LoggingInstrumentor().instrument()
 
@@ -54,52 +55,95 @@ tracer = trace.get_tracer(__name__)
 logger = logging.getLogger(__name__)
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    logger.info(
+        "FastAPI service starting up", extra={"extra_fields": {"event": "startup"}}
+    )
+    yield
+    logger.info(
+        "FastAPI service shutting down", extra={"extra_fields": {"event": "shutdown"}}
+    )
+
+
+app = FastAPI(lifespan=lifespan)
+FastAPIInstrumentor.instrument_app(app)
+
+
 @app.get("/healthz")
 async def healthz():
-    with tracer.start_as_current_span("healthz"):
-        logger.info("Health check", extra={"extra_fields": {"endpoint": "/healthz"}})
+    with tracer.start_as_current_span("healthz") as span:
+        span.set_attribute("endpoint", "/healthz")
+        logger.info(
+            "Health check",
+            extra={"extra_fields": {"endpoint": "/healthz", "status": "ok"}},
+        )
         return {"status": "ok"}
 
 
 @app.get("/api/logs")
 async def get_logs(message: Optional[str] = "sample log"):
-    with tracer.start_as_current_span("get_logs"):
+    correlation_id = str(uuid.uuid4())
+    with tracer.start_as_current_span("get_logs") as span:
+        span.set_attribute("correlation_id", correlation_id)
+        span.set_attribute("request_message", message)
         logger.info(
             f"Received log request: {message}",
-            extra={"extra_fields": {"request_message": message}},
+            extra={
+                "extra_fields": {
+                    "correlation_id": correlation_id,
+                    "request_message": message,
+                    "message_length": len(message) if message else 0,
+                }
+            },
         )
-        return {"logged": message}
+        return {"logged": message, "correlation_id": correlation_id}
 
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
+    correlation_id = str(uuid.uuid4())
+    request.state.correlation_id = correlation_id
+
     with tracer.start_as_current_span(f"{request.method} {request.url.path}") as span:
-        response = await call_next(request)
         span.set_attribute("http.method", request.method)
         span.set_attribute("http.url", str(request.url.path))
-        span.set_attribute("http.status_code", response.status_code)
         span.set_attribute(
-            "client.ip", request.client.host if request.client else "unknown"
+            "http.client_ip", request.client.host if request.client else "unknown"
         )
-        logger.info(
-            f"{request.method} {request.url.path}",
-            extra={
-                "extra_fields": {
-                    "http.method": request.method,
-                    "http.url": str(request.url.path),
-                    "http.status_code": response.status_code,
-                    "client.ip": request.client.host if request.client else "unknown",
-                }
-            },
-        )
-        return response
+        span.set_attribute("correlation_id", correlation_id)
 
-
-@app.on_event("startup")
-def startup_event():
-    logger.info("FastAPI service starting up")
-
-
-@app.on_event("shutdown")
-def shutdown_event():
-    logger.info("FastAPI service shutting down")
+        try:
+            response = await call_next(request)
+            span.set_attribute("http.status_code", response.status_code)
+            logger.info(
+                f"{request.method} {request.url.path}",
+                extra={
+                    "extra_fields": {
+                        "correlation_id": correlation_id,
+                        "http.method": request.method,
+                        "http.url": str(request.url.path),
+                        "http.status_code": response.status_code,
+                        "http.client_ip": request.client.host
+                        if request.client
+                        else "unknown",
+                    }
+                },
+            )
+            return response
+        except Exception as e:
+            span.set_attribute("http.status_code", 500)
+            span.record_exception(e)
+            logger.error(
+                f"Request failed: {request.method} {request.url.path}",
+                extra={
+                    "extra_fields": {
+                        "correlation_id": correlation_id,
+                        "http.method": request.method,
+                        "http.url": str(request.url.path),
+                        "error": str(e),
+                    }
+                },
+                exc_info=True,
+            )
+            raise

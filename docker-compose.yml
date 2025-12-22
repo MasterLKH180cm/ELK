@@ -21,22 +21,22 @@ services:
     restart: unless-stopped
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:latest
+    image: otel/opentelemetry-collector-contrib:0.142.0
     container_name: otel-collector
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
       - ./otel-collector/config.yml:/etc/otel-collector-config.yml:ro
     ports:
-      - "4317:4317"   # OTLP gRPC receiver
-      - "4318:4318"   # OTLP HTTP receiver
-      - "8887:8888"   # Prometheus metrics
-      - "13133:13133"   # Health check
-    environment:
-      - ELASTICSEARCH_ENDPOINT=http://elasticsearch:9200
+      - "4317:4317"
+      - "4318:4318"
+      - "8887:8888"
+      - "13133:13133"
     networks:
       - elk
     depends_on:
       elasticsearch:
+        condition: service_healthy
+      kafka:
         condition: service_healthy
     restart: unless-stopped
 
@@ -55,6 +55,7 @@ services:
       - "LS_JAVA_OPTS=-Xms${LS_HEAP_SIZE} -Xmx${LS_HEAP_SIZE}"
       - ES_HOST=elasticsearch
       - ES_PORT=9200
+      - KAFKA_BROKERS=kafka:29092
     networks:
       - elk
     depends_on:

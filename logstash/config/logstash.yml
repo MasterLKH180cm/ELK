@@ -6,6 +6,9 @@ xpack.monitoring.elasticsearch.hosts: ["http://elasticsearch:9200"]
 pipeline.workers: 2
 pipeline.batch.size: 125
 pipeline.batch.delay: 50
+pipeline.unsafe_shutdown: false
+
+# Default index settings
 pipeline.ordered: auto
 path.config: /usr/share/logstash/pipeline/*.conf
 

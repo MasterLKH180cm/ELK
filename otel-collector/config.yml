@@ -11,13 +11,13 @@ receivers:
         endpoint: "0.0.0.0:4318"
 
 processors:
-  batch:
-    send_batch_size: 1024
-    timeout: 10s
   memory_limiter:
     check_interval: 1s
     limit_mib: 512
     spike_limit_mib: 128
+  resourcedetection:
+    detectors: [env, system]
+    override: false
   attributes:
     actions:
       - key: service.version
@@ -26,28 +26,49 @@ processors:
       - key: deployment.environment
         value: "development"
         action: upsert
+  transform:
+    log_statements:
+      - context: log
+        statements:
+          - set(attributes["log.level"], severity_text)
+  probabilistic_sampler:
+    sampling_percentage: 100
+  batch:
+    send_batch_size: 256
+    timeout: 2s
+    send_batch_max_size: 1024
 
 exporters:
   debug:
-    verbosity: detailed
-  elasticsearch:
-    endpoint: "http://elasticsearch:9200"
-    logs_index: "otel-logs-%{+yyyy.MM.dd}"
-    traces_index: "otel-traces-%{+yyyy.MM.dd}"
-    metrics_index: "otel-metrics-%{+yyyy.MM.dd}"
+    verbosity: basic
+  kafka:
+    brokers:
+      - kafka:29092
+    protocol_version: "2.6.0"
+    client_id: "otel-collector"
+    # Signal-specific configuration
+    traces:
+      topic: otel-traces
+      encoding: otlp_proto
+    metrics:
+      topic: otel-metrics
+      encoding: otlp_proto
+    logs:
+      topic: otel-logs
+      encoding: otlp_json  # Changed to otlp_json (valid encoding that preserves attributes)
 
 service:
   extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, batch, attributes]
-      exporters: [elasticsearch, debug]
+      processors: [memory_limiter, resourcedetection, probabilistic_sampler, attributes, batch]
+      exporters: [debug, kafka]
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, batch]
-      exporters: [elasticsearch, debug]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [debug, kafka]
     logs:
       receivers: [otlp]
-      processors: [memory_limiter, batch, attributes]
-      exporters: [elasticsearch, debug]
+      processors: [memory_limiter, resourcedetection, attributes, transform, batch]
+      exporters: [debug, kafka]
