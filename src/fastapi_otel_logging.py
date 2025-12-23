@@ -18,13 +18,14 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
-# OTLP endpoint configuration
-OTEL_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_ENDPOINT", "http://otel-collector:4317")
+# OTEL endpoint configuration - explicit per-signal endpoint
+OTEL_TRACES_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "otel-collector:4317")
+OTEL_LOGS_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "otel-collector:4317")
 
 # OpenTelemetry setup with ECS fields
 trace.set_tracer_provider(TracerProvider())
 trace.get_tracer_provider().add_span_processor(
-    BatchSpanProcessor(OTLPSpanExporter(endpoint=OTEL_ENDPOINT))
+    BatchSpanProcessor(OTLPSpanExporter(endpoint=OTEL_TRACES_ENDPOINT, insecure=True))
 )
 
 logger_provider = LoggerProvider(
@@ -40,7 +41,7 @@ logger_provider = LoggerProvider(
 )
 set_logger_provider(logger_provider)
 
-exporter = OTLPLogExporter(endpoint=OTEL_ENDPOINT, insecure=True)
+exporter = OTLPLogExporter(endpoint=OTEL_LOGS_ENDPOINT, insecure=True)
 logger_provider.add_log_record_processor(BatchLogRecordProcessor(exporter))
 handler = LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
 

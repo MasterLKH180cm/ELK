@@ -1,0 +1,76 @@
+{
+  "index_patterns": ["otel-logs-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.codec": "best_compression",
+      "index.refresh_interval": "30s"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "format": "strict_date_time||epoch_millis"
+        },
+        "message": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "log_level": {
+          "type": "keyword"
+        },
+        "service_name": {
+          "type": "keyword"
+        },
+        "service_version": {
+          "type": "keyword"
+        },
+        "service_instance_id": {
+          "type": "keyword"
+        },
+        "environment": {
+          "type": "keyword"
+        },
+        "host_name": {
+          "type": "keyword"
+        },
+        "sdk_language": {
+          "type": "keyword"
+        },
+        "correlation_id": {
+          "type": "keyword"
+        },
+        "otelSpanID": {
+          "type": "keyword"
+        },
+        "otelTraceID": {
+          "type": "keyword"
+        },
+        "otelServiceName": {
+          "type": "keyword"
+        },
+        "otelTraceSampled": {
+          "type": "boolean"
+        },
+        "code_file_path": {
+          "type": "keyword"
+        },
+        "code_function_name": {
+          "type": "keyword"
+        },
+        "code_line_number": {
+          "type": "integer"
+        },
+        "parse_error": {
+          "type": "text"
+        }
+      }
+    }
+  }
+}

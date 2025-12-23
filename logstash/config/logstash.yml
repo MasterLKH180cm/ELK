@@ -8,9 +8,8 @@ pipeline.batch.size: 125
 pipeline.batch.delay: 50
 pipeline.unsafe_shutdown: false
 
-# Default index settings
-pipeline.ordered: auto
-path.config: /usr/share/logstash/pipeline/*.conf
+# Only load otel-kafka.conf pipeline (OTLP Collector logs)
+path.config: /usr/share/logstash/pipeline/otel-kafka.conf
 
 # Queue settings
 queue.type: memory
@@ -21,4 +20,4 @@ config.reload.automatic: false
 config.reload.interval: 3s
 
 # Log settings
-# log.level: info
+log.level: info
