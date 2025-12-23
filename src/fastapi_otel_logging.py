@@ -19,8 +19,12 @@ from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 
 # OTEL endpoint configuration - explicit per-signal endpoint
-OTEL_TRACES_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "otel-collector:4317")
-OTEL_LOGS_ENDPOINT = os.getenv("OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "otel-collector:4317")
+OTEL_TRACES_ENDPOINT = os.getenv(
+    "OTEL_EXPORTER_OTLP_TRACES_ENDPOINT", "otel-collector:4317"
+)
+OTEL_LOGS_ENDPOINT = os.getenv(
+    "OTEL_EXPORTER_OTLP_LOGS_ENDPOINT", "otel-collector:4317"
+)
 
 # OpenTelemetry setup with ECS fields
 trace.set_tracer_provider(TracerProvider())

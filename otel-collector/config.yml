@@ -46,16 +46,13 @@ exporters:
       - kafka:29092
     protocol_version: "2.6.0"
     client_id: "otel-collector"
-    # Signal-specific configuration
+    # Traces exporter with proto encoding
     traces:
       topic: otel-traces
-      encoding: otlp_proto
     metrics:
       topic: otel-metrics
-      encoding: otlp_proto
     logs:
       topic: otel-logs
-      encoding: otlp_json  # Changed to otlp_json (valid encoding that preserves attributes)
 
 service:
   extensions: [health_check]
