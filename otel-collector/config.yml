@@ -46,13 +46,16 @@ exporters:
       - kafka:29092
     protocol_version: "2.6.0"
     client_id: "otel-collector"
-    # Traces exporter with proto encoding
+    # JSON encoding for readable messages in Kafka UI
     traces:
       topic: otel-traces
+      encoding: otlp_json
     metrics:
       topic: otel-metrics
+      encoding: otlp_json
     logs:
       topic: otel-logs
+      encoding: otlp_json
 
 service:
   extensions: [health_check]
