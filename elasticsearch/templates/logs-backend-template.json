@@ -1,0 +1,52 @@
+{
+  "index_patterns": ["logs-backend-*"],
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 0,
+      "index.codec": "best_compression",
+      "index.refresh_interval": "30s"
+    },
+    "mappings": {
+      "properties": {
+        "@timestamp": {
+          "type": "date",
+          "format": "strict_date_time||epoch_millis"
+        },
+        "message": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "log_level": {
+          "type": "keyword"
+        },
+        "service_name": {
+          "type": "keyword"
+        },
+        "service_version": {
+          "type": "keyword"
+        },
+        "correlation_id": {
+          "type": "keyword"
+        },
+        "database_query_time_ms": {
+          "type": "integer"
+        },
+        "error_code": {
+          "type": "keyword"
+        },
+        "http_method": {
+          "type": "keyword"
+        },
+        "http_status": {
+          "type": "integer"
+        }
+      }
+    }
+  }
+}

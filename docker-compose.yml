@@ -11,6 +11,7 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
       - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ./elasticsearch/templates:/usr/local/elasticsearch/templates:ro
       - ./scripts/init-es.sh:/usr/local/bin/init-es.sh:ro
     networks:
       - elk
@@ -93,6 +94,7 @@ services:
       - SERVER_HOST=0.0.0.0
     volumes:
       - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
+      - ./scripts/init-kibana.sh:/usr/local/bin/init-kibana.sh:ro
     networks:
       - elk
     depends_on:
@@ -104,6 +106,14 @@ services:
       timeout: 10s
       retries: 5
     restart: unless-stopped
+    command: >
+      sh -c "
+        /usr/share/kibana/bin/kibana &
+        PID=$$!
+        sleep 20 &&
+        bash /usr/local/bin/init-kibana.sh;
+        wait $$PID
+      "
 
   app:
     build:

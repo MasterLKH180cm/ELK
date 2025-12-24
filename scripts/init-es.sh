@@ -178,7 +178,7 @@ echo ""
 create_index_template "logs-auth" "logs-auth-*" "logs-retention-30-90"
 create_index_template "logs-frontend" "logs-frontend-*" "logs-retention-7-30"
 create_index_template "logs-backend" "logs-backend-*" "logs-retention-30-90"
-create_index_template "logs-security" "logs-security-*" "logs-retention-30-90"
+create_index_template "logs-default" "logs-default-*" "logs-retention-30-90"
 
 echo ""
 echo "✅ Elasticsearch 索引和 ILM 政策設置完成！"
