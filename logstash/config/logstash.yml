@@ -1,23 +1,25 @@
-http.host: "0.0.0.0"
+api.http.host: "0.0.0.0"
+api.http.port: 9600
 xpack.monitoring.enabled: true
 xpack.monitoring.elasticsearch.hosts: ["http://elasticsearch:9200"]
 
-# Pipeline settings
-pipeline.workers: 2
-pipeline.batch.size: 125
+# Pipeline Configuration
+path.config: /usr/share/logstash/pipeline/
+
+# Performance Tuning
+pipeline.workers: 4
+pipeline.batch.size: 250
 pipeline.batch.delay: 50
 pipeline.unsafe_shutdown: false
 
-# Load all OTLP Kafka pipelines (logs, traces, metrics)
-path.config: /usr/share/logstash/pipeline/
-
-# Queue settings
+# Queue Settings
 queue.type: memory
 queue.max_bytes: 512mb
 
-# Disable automatic reload
+# Config Management
 config.reload.automatic: false
 config.reload.interval: 3s
 
-# Log settings
+# Logging
 log.level: info
+

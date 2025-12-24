@@ -15,24 +15,45 @@ processors:
     check_interval: 1s
     limit_mib: 512
     spike_limit_mib: 128
+
   resourcedetection:
     detectors: [env, system]
     override: false
-  attributes:
-    actions:
-      - key: service.version
-        value: "1.0.0"
-        action: upsert
-      - key: deployment.environment
-        value: "development"
-        action: upsert
+
   transform:
     log_statements:
       - context: log
         statements:
           - set(attributes["log.level"], severity_text)
+          - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
+          - set(attributes["log.route"], "default")
+  filter/logs-auth:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'attributes["event.domain"] != "auth"'
+
+  filter/logs-frontend:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'attributes["event.domain"] != "frontend"'
+
+  filter/logs-backend:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'attributes["event.domain"] != "backend"'
+  filter/logs-default:
+    error_mode: ignore
+    logs:
+      log_record:
+        - 'attributes["event.domain"] == "frontend"'
+        - 'attributes["event.domain"] == "auth"'
+        - 'attributes["event.domain"] == "backend"'
   probabilistic_sampler:
     sampling_percentage: 100
+
   batch:
     send_batch_size: 256
     timeout: 2s
@@ -41,34 +62,85 @@ processors:
 exporters:
   debug:
     verbosity: basic
-  kafka:
+
+  kafka/traces:
     brokers:
       - kafka:29092
     protocol_version: "2.6.0"
-    client_id: "otel-collector"
-    # JSON encoding for readable messages in Kafka UI
-    traces:
-      topic: otel-traces
-      encoding: otlp_json
-    metrics:
-      topic: otel-metrics
-      encoding: otlp_json
-    logs:
-      topic: otel-logs
-      encoding: otlp_json
+    client_id: "otel-collector-traces"
+    topic: otel-traces
+    encoding: otlp_json
+
+  kafka/metrics:
+    brokers:
+      - kafka:29092
+    protocol_version: "2.6.0"
+    client_id: "otel-collector-metrics"
+    topic: otel-metrics
+    encoding: otlp_json
+
+  kafka/logs-auth:
+    brokers:
+      - kafka:29092
+    protocol_version: "2.6.0"
+    client_id: "otel-collector-logs-auth"
+    topic: otel-logs-auth
+    encoding: otlp_json
+
+  kafka/logs-frontend:
+    brokers:
+      - kafka:29092
+    protocol_version: "2.6.0"
+    client_id: "otel-collector-logs-frontend"
+    topic: otel-logs-frontend
+    encoding: otlp_json
+
+  kafka/logs-backend:
+    brokers:
+      - kafka:29092
+    protocol_version: "2.6.0"
+    client_id: "otel-collector-logs-backend"
+    topic: otel-logs-backend
+    encoding: otlp_json
+
+  kafka/logs-default:
+    brokers:
+      - kafka:29092
+    protocol_version: "2.6.0"
+    client_id: "otel-collector-logs-default"
+    topic: otel-logs-default
+    encoding: otlp_json
 
 service:
   extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, probabilistic_sampler, attributes, batch]
-      exporters: [debug, kafka]
+      processors:
+        [memory_limiter, resourcedetection, probabilistic_sampler, batch]
+      exporters: [debug, kafka/traces]
+
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection, batch]
-      exporters: [debug, kafka]
-    logs:
+      exporters: [debug, kafka/metrics]
+
+    logs/frontend:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, attributes, transform, batch]
-      exporters: [debug, kafka]
+      processors: [memory_limiter, resourcedetection, filter/logs-frontend, batch]
+      exporters: [kafka/logs-frontend]
+
+    logs/auth:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, filter/logs-auth, batch]
+      exporters: [kafka/logs-auth]
+
+    logs/backend:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, filter/logs-backend, batch]
+      exporters: [kafka/logs-backend]
+
+    logs/default:
+      receivers: [otlp]
+      processors: [memory_limiter, resourcedetection, filter/logs-default, batch]
+      exporters: [kafka/logs-default]

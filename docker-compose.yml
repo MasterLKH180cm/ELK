@@ -11,6 +11,7 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
       - ./elasticsearch/config/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml:ro
+      - ./scripts/init-es.sh:/usr/local/bin/init-es.sh:ro
     networks:
       - elk
     healthcheck:
@@ -19,6 +20,14 @@ services:
       timeout: 10s
       retries: 5
     restart: unless-stopped
+    command: >
+      sh -c "
+        /usr/share/elasticsearch/bin/elasticsearch &
+        PID=$$!
+        sleep 30 &&
+        /usr/local/bin/init-es.sh;
+        wait $$PID
+      "
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.142.0
