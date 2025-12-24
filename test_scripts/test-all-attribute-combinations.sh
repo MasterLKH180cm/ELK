@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Comprehensive test script for all log attribute combinations
-# Tests: event_domain, event_category, event_type, log_level, environment
+# Comprehensive test script for ALL log attribute combinations
+# Tests all combinations: environment × log_level × event_domain × event_type × event_category
 
 BASE_URL="http://localhost:8000/api/logs"
 SERVICE_NAME="test-service"
@@ -19,12 +19,14 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
+CYAN='\033[0;36m'
 NC='\033[0m' # No Color
 
-# Test counter
+# Test counters
 TOTAL_TESTS=0
 PASSED_TESTS=0
 FAILED_TESTS=0
+START_TIME=$(date +%s)
 
 # Function to perform curl request and check response
 test_endpoint() {
@@ -59,67 +61,84 @@ test_endpoint() {
     # Check if response is successful (200-299)
     if [[ $http_code =~ ^[2][0-9]{2}$ ]]; then
         PASSED_TESTS=$((PASSED_TESTS + 1))
-        echo -e "${GREEN}✓ PASS${NC} [${env}|${level}|${domain}|${type}|${category}] HTTP ${http_code}"
+        # Show progress every 10 tests
+        if (( TOTAL_TESTS % 10 == 0 )); then
+            echo -e "${GREEN}✓${NC} Test ${TOTAL_TESTS}: [${env}|${level}|${domain}|${type}|${category}] HTTP ${http_code}"
+        fi
     else
         FAILED_TESTS=$((FAILED_TESTS + 1))
-        echo -e "${RED}✗ FAIL${NC} [${env}|${level}|${domain}|${type}|${category}] HTTP ${http_code}"
-        echo "Response: ${body}"
+        echo -e "${RED}✗${NC} Test ${TOTAL_TESTS}: [${env}|${level}|${domain}|${type}|${category}] HTTP ${http_code}"
+        echo "  Response: ${body}"
     fi
 }
 
-# Test Case 1: Basic combinations - one from each category
-echo -e "${BLUE}=== Test Case 1: Basic Combinations ===${NC}"
+# Display test configuration
+echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║ Comprehensive Log Attribute Combination Test              ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "Configuration:"
+echo -e "  Environments:   ${YELLOW}${#ENVIRONMENTS[@]}${NC} (${ENVIRONMENTS[@]})"
+echo -e "  Log Levels:     ${YELLOW}${#LOG_LEVELS[@]}${NC} (${LOG_LEVELS[@]})"
+echo -e "  Domains:        ${YELLOW}${#EVENT_DOMAINS[@]}${NC} (${EVENT_DOMAINS[@]})"
+echo -e "  Event Types:    ${YELLOW}${#EVENT_TYPES[@]}${NC} (${EVENT_TYPES[@]})"
+echo -e "  Categories:     ${YELLOW}${#EVENT_CATEGORIES[@]}${NC} (${EVENT_CATEGORIES[@]})"
+echo ""
+
+# Calculate total combinations
+TOTAL_COMBINATIONS=$((${#ENVIRONMENTS[@]} * ${#LOG_LEVELS[@]} * ${#EVENT_DOMAINS[@]} * ${#EVENT_TYPES[@]} * ${#EVENT_CATEGORIES[@]}))
+echo -e "${CYAN}Total combinations to test: ${TOTAL_COMBINATIONS}${NC}"
+echo -e "Starting test run at $(date '+%Y-%m-%d %H:%M:%S')"
+echo ""
+
+# Main test loop: iterate through ALL combinations
+test_count=0
 for env in "${ENVIRONMENTS[@]}"; do
     for level in "${LOG_LEVELS[@]}"; do
-        test_endpoint "${env}" "${level}" "backend" "access" "api" "Basic test log"
+        for domain in "${EVENT_DOMAINS[@]}"; do
+            for type in "${EVENT_TYPES[@]}"; do
+                for category in "${EVENT_CATEGORIES[@]}"; do
+                    test_count=$((test_count + 1))
+                    
+                    # Create descriptive message
+                    message="Test ${test_count}/${TOTAL_COMBINATIONS} - ${domain}/${type}/${category}"
+                    
+                    # Call test function
+                    test_endpoint "${env}" "${level}" "${domain}" "${type}" "${category}" "${message}"
+                    
+                    # Optional: Add small delay to avoid overwhelming server (every 50 tests)
+                    if (( test_count % 50 == 0 )); then
+                        echo -e "${YELLOW}Progress: ${test_count}/${TOTAL_COMBINATIONS} tests completed ($(( (test_count * 100) / TOTAL_COMBINATIONS ))%)${NC}"
+                        sleep 0.5
+                    fi
+                done
+            done
+        done
     done
 done
 
-# Test Case 2: All Event Domains with fixed other parameters
-echo -e "\n${BLUE}=== Test Case 2: All Event Domains ===${NC}"
-for domain in "${EVENT_DOMAINS[@]}"; do
-    test_endpoint "prod" "INFO" "${domain}" "access" "api" "Event domain test: ${domain}"
-done
-
-# Test Case 3: All Event Types with fixed other parameters
-echo -e "\n${BLUE}=== Test Case 3: All Event Types ===${NC}"
-for type in "${EVENT_TYPES[@]}"; do
-    test_endpoint "prod" "INFO" "backend" "${type}" "api" "Event type test: ${type}"
-done
-
-# Test Case 4: All Event Categories with fixed other parameters
-echo -e "\n${BLUE}=== Test Case 4: All Event Categories ===${NC}"
-for category in "${EVENT_CATEGORIES[@]}"; do
-    test_endpoint "prod" "INFO" "backend" "access" "${category}" "Event category test: ${category}"
-done
-
-# Test Case 5: Cross-domain combinations
-echo -e "\n${BLUE}=== Test Case 5: Cross-Domain Combinations ===${NC}"
-test_endpoint "dev" "DEBUG" "auth" "validation" "authentication" "Auth validation in dev"
-test_endpoint "prod" "ERROR" "security" "audit" "security" "Security audit in production"
-test_endpoint "test" "INFO" "database" "performance" "database" "Database performance in test"
-test_endpoint "prod" "FATAL" "frontend" "security" "application" "Frontend security issue"
-test_endpoint "staging" "TRACE" "cache" "access" "infrastructure" "Cache access in staging"
-
-# Test Case 6: Edge cases with different messages
-echo -e "\n${BLUE}=== Test Case 6: Edge Cases ===${NC}"
-test_endpoint "prod" "INFO" "backend" "access" "api" "Short"
-test_endpoint "prod" "INFO" "backend" "access" "api" "This is a much longer message with multiple words to test message length handling in the system"
-test_endpoint "dev" "ERROR" "auth" "error" "authentication" "Authentication failed for user"
+# Calculate execution time
+END_TIME=$(date +%s)
+EXECUTION_TIME=$((END_TIME - START_TIME))
 
 # Summary
-echo -e "\n${BLUE}==================================${NC}"
-echo -e "${BLUE}Test Summary${NC}"
-echo -e "${BLUE}==================================${NC}"
-echo -e "Total Tests:  ${TOTAL_TESTS}"
-echo -e "${GREEN}Passed:      ${PASSED_TESTS}${NC}"
-echo -e "${RED}Failed:      ${FAILED_TESTS}${NC}"
-echo -e "${BLUE}==================================${NC}"
+echo ""
+echo -e "${BLUE}╔════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║ Test Summary                                               ║${NC}"
+echo -e "${BLUE}╚════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "Total Tests Run:   ${TOTAL_TESTS}"
+echo -e "${GREEN}Passed:            ${PASSED_TESTS}${NC}"
+echo -e "${RED}Failed:            ${FAILED_TESTS}${NC}"
+echo -e "Success Rate:      $(( (PASSED_TESTS * 100) / TOTAL_TESTS ))%"
+echo -e "Execution Time:    ${EXECUTION_TIME} seconds"
+echo -e "Tests per Second:  $(( TOTAL_TESTS / (EXECUTION_TIME + 1) ))"
+echo ""
 
 if [ $FAILED_TESTS -eq 0 ]; then
-    echo -e "${GREEN}All tests passed!${NC}"
+    echo -e "${GREEN}✓ All tests passed!${NC}"
     exit 0
 else
-    echo -e "${RED}Some tests failed!${NC}"
+    echo -e "${RED}✗ Some tests failed!${NC}"
     exit 1
 fi
