@@ -152,100 +152,242 @@ curl http://localhost:8000/healthz
 
 ---
 
-### 2. Log Message
+### 2. Get Logs (Log Message Submission)
 
 **Endpoint:** `GET /api/logs`
 
-Submit a log message with automatic tracing, correlation tracking, and metadata enrichment.
+Submit a log message with comprehensive OpenTelemetry instrumentation, automatic tracing, correlation tracking, and optional metadata enrichment. Supports structured logging with custom attributes, validation, and PII protection.
 
-#### Request
+#### Overview
 
-```bash
-curl "http://localhost:8000/api/logs?message=hello%20world"
-```
+- **Method**: GET
+- **Path**: `/api/logs`
+- **Base URL**: `http://localhost:8000`
+- **Response Code**: 200 OK
+- **Content Type**: application/json
 
 #### Query Parameters
 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
-| `message` | string | No | `"sample log"` | The message to log |
+| `message` | string | No | `"sample log"` | The log message content to record |
+
+#### Request Headers (All Optional, Recommended for Full Enrichment)
+
+| Header | Type | Valid Values | Default | Description |
+|--------|------|--------------|---------|-------------|
+| `X-Service-Name` | string | Any | `"unknown-service"` | Name of the service generating the log |
+| `X-Service-Version` | string | Semantic version | `1.0.0` (from env) | Version of the service |
+| `X-Environment` | string | `dev`, `staging`, `prod`, `test` | `dev` (from env) | Deployment environment |
+| `X-Log-Level` | string | `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`, `TRACE` | `INFO` | Severity level of the log |
+| `X-Event-Type` | string | `access`, `error`, `audit`, `validation`, `performance`, `security` | `access` | Type of event being logged |
+| `X-Event-Category` | string | `application`, `authentication`, `database`, `api`, `security`, `infrastructure` | `api` | Technical category of the event |
+| `X-Event-Domain` | string | `auth`, `frontend`, `backend` | `backend` | Business or technical domain |
+| `Content-Type` | string | `application/json` | Optional | HTTP content type hint |
 
 #### Request Examples
 
+##### Basic Request (cURL)
 ```bash
-# Default message
 curl http://localhost:8000/api/logs
+```
 
-# Custom message
-curl "http://localhost:8000/api/logs?message=hello%20world"
+##### Custom Message
+```bash
+curl "http://localhost:8000/api/logs?message=User%20authentication%20successful"
+```
 
-# Long message (URL encoded)
-curl "http://localhost:8000/api/logs?message=$(echo%20'This%20is%20a%20longer%20message')"
+##### With Full Attributes (cURL)
+```bash
+curl -X GET "http://localhost:8000/api/logs?message=Login%20attempt" \
+  -H "X-Service-Name: auth-api" \
+  -H "X-Service-Version: 1.2.0" \
+  -H "X-Environment: prod" \
+  -H "X-Log-Level: INFO" \
+  -H "X-Event-Type: audit" \
+  -H "X-Event-Category: authentication" \
+  -H "X-Event-Domain: auth"
+```
 
-# Special characters
-curl "http://localhost:8000/api/logs?message=Error%20%40%20Step%202%21"
+##### With PowerShell
+```powershell
+$headers = @{
+    "X-Service-Name" = "auth-api"
+    "X-Service-Version" = "1.0.0"
+    "X-Environment" = "prod"
+    "X-Log-Level" = "INFO"
+    "X-Event-Type" = "access"
+    "X-Event-Category" = "authentication"
+    "X-Event-Domain" = "auth"
+}
 
-# With jq (pretty print)
-curl -s "http://localhost:8000/api/logs?message=test" | jq '.'
+$response = Invoke-WebRequest `
+    -Uri "http://localhost:8000/api/logs?message=Authentication%20successful" `
+    -Headers $headers `
+    -Method GET
 
-# Capture correlation ID
+$response.Content | ConvertFrom-Json
+```
+
+##### With Python
+```python
+import requests
+
+headers = {
+    "X-Service-Name": "auth-api",
+    "X-Service-Version": "1.0.0",
+    "X-Environment": "prod",
+    "X-Log-Level": "INFO",
+    "X-Event-Type": "access",
+    "X-Event-Category": "authentication",
+    "X-Event-Domain": "auth"
+}
+
+response = requests.get(
+    "http://localhost:8000/api/logs",
+    params={"message": "Authentication successful"},
+    headers=headers
+)
+
+print(response.json())
+```
+
+##### Utility Scripts
+```bash
+# Extract and print correlation ID
 CORR_ID=$(curl -s "http://localhost:8000/api/logs?message=test" | jq -r '.correlation_id')
 echo "Correlation ID: $CORR_ID"
+
+# Pretty print response
+curl -s "http://localhost:8000/api/logs?message=test" | jq '.'
+
+# Batch requests (sequential)
+for i in {1..5}; do
+  curl -s "http://localhost:8000/api/logs?message=batch_test_$i"
+done
+
+# Parallel requests (10 concurrent)
+seq 1 10 | xargs -P 10 -I {} curl -s "http://localhost:8000/api/logs?message=test_{}"
 ```
 
 #### Response
 
+**HTTP Status:** 200 OK
+
 ```json
 {
-  "logged": "hello world",
+  "logged": "User authentication successful",
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000"
 }
 ```
 
-**HTTP Status:** 200 OK
-
-#### Response Fields
+**Response Fields:**
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `logged` | string | The message that was logged |
-| `correlation_id` | UUID | Unique request tracking ID |
+| `logged` | string | The exact message that was logged (echoes the query parameter) |
+| `correlation_id` | UUID | Unique identifier (v4) for request tracing across the entire system |
 
-#### Telemetry Details
+#### Log Attributes (Generated Automatically)
 
-| Attribute | Value |
-|-----------|-------|
-| Span Name | `get_logs` |
-| Log Level | INFO |
-| Log Message | `Received log request: {message}` |
-
-#### Span Attributes
-
+**Service Metadata** (from environment or headers):
 ```json
 {
-  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "request_message": "hello world",
-  "message_length": 11
-}
-```
-
-#### Example Log in Elasticsearch
-
-```json
-{
-  "@timestamp": "2024-01-15T10:30:45.123Z",
   "service.name": "fastapi-otel",
   "service.version": "1.0.0",
   "service.instance.id": "instance-1",
   "deployment.environment": "development",
-  "host.name": "docker-host",
-  "log.level": "INFO",
-  "message": "Received log request: hello world",
-  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
-  "request_message": "hello world",
-  "message_length": 11
+  "host.name": "docker-host"
 }
 ```
+
+**Request-Specific Attributes:**
+```json
+{
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_message": "User authentication successful",
+  "message_length": 31,
+  "log.level": "INFO",
+  "event.type": "access",
+  "event.category": "authentication",
+  "event.domain": "auth"
+}
+```
+
+#### Validation & Constraints
+
+**Mandatory Attributes** (automatically enforced):
+- `service.name` - Must not be empty
+- `deployment.environment` - Must be one of: `dev`, `staging`, `prod`, `test`
+- `log.level` - Must be one of: `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`, `TRACE`
+- `event.domain` - Must be one of: `auth`, `frontend`, `backend`
+- `event.type` - Must be one of: `access`, `error`, `audit`, `validation`, `performance`, `security`
+
+**Forbidden Keywords** (automatically redacted for PII protection):
+- `password`, `secret`, `token`, `api_key`
+- `credit_card`, `ssn`, `national_id`
+
+If detected, PII is automatically masked with `[REDACTED_*]` patterns.
+
+#### Telemetry Details
+
+**OpenTelemetry Span:**
+- Span Name: `get_logs`
+- Span Attributes:
+  - `correlation_id`
+  - `request_message`
+  - `service.name`
+  - `environment`
+
+**Log Export:**
+- Exporter: OTLP gRPC
+- Endpoint: `otel-collector:4317` (configurable via `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT`)
+- Protocol: OpenTelemetry Protocol (OTLP)
+
+#### Example Log Entry in Elasticsearch
+
+```json
+{
+  "@timestamp": "2024-01-15T10:30:45.123Z",
+  "message": "Received log request: User authentication successful",
+  "log.level": "INFO",
+  "service.name": "fastapi-otel",
+  "service.version": "1.0.0",
+  "service.instance.id": "instance-1",
+  "deployment.environment": "production",
+  "host.name": "docker-host",
+  "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
+  "request_message": "User authentication successful",
+  "message_length": 31,
+  "event.domain": "auth",
+  "event.type": "access",
+  "event.category": "authentication"
+}
+```
+
+#### Error Handling & Fallbacks
+
+If attribute validation fails:
+1. A WARNING is logged
+2. Missing mandatory attributes are filled with defaults from environment variables
+3. The request proceeds normally with HTTP 200
+4. Full enrichment is attempted using `LogAttributesEnricher`
+
+**Example: Missing X-Environment Header**
+```bash
+curl "http://localhost:8000/api/logs?message=test" \
+  -H "X-Service-Name: api"
+# X-Environment defaults to "dev"
+# Response: HTTP 200 with valid correlation_id
+```
+
+#### Performance Characteristics
+
+- **Latency**: < 10ms (local processing)
+- **Async logging**: Non-blocking, logs batch exported via OTLP
+- **Batch size**: 256 log records (configurable)
+- **Timeout**: 2 seconds before export (configurable)
+- **Throughput**: ~1000 req/sec per instance
 
 ---
 

@@ -177,20 +177,47 @@ uv run uvicorn src.fastapi_otel_logging:app --host 0.0.0.0 --port 8000 --reload
 ### Features
 
 ✅ Distributed tracing with correlation IDs (UUID per request)  
-✅ Structured logging with extra fields  
+✅ Structured logging with enriched contextual attributes  
 ✅ OTLP gRPC exporter for traces, metrics, and logs  
-✅ Kafka producer via OTLP Collector  
-✅ Request/response middleware with HTTP metadata  
-✅ Exception tracing and error logging  
+✅ Kafka producer via OTLP Collector for scalable log streaming  
+✅ Request/response middleware with HTTP metadata (method, status, latency, client IP)  
+✅ Exception tracing with full stack traces and error context  
 ✅ Resource attributes (service name, version, environment, hostname)  
 ✅ Automatic instrumentation of FastAPI, requests, logging  
+✅ Attribute validation and enrichment with mandatory field enforcement  
+✅ PII protection (automatic redaction of sensitive keywords)  
+✅ Request correlation tracking across the entire pipeline (FastAPI → OTLP → Kafka → Logstash → Elasticsearch)  
+✅ Non-blocking async logging with batch export  
 
 ### Available Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/healthz` | Health check |
-| GET | `/api/logs?message=<msg>` | Log a message |
+| GET | `/healthz` | Health check endpoint |
+| GET | `/api/logs?message=<msg>` | Log a message with optional enrichment headers |
+| GET | `/docs` | Swagger API documentation |
+| GET | `/redoc` | ReDoc API documentation |
+
+#### GET /healthz
+Health check to verify the service is running.
+```bash
+curl http://localhost:8000/healthz
+```
+
+#### GET /api/logs
+Log a message with OpenTelemetry instrumentation and automatic correlation tracking.
+
+**Query Parameters:**
+- `message` (optional, string): Log message content. Default: `"sample log"`
+
+**Optional Headers (Recommended):**
+- `X-Service-Name`: Service name (default: `unknown-service`)
+- `X-Service-Version`: Service version (default: `1.0.0`)
+- `X-Environment`: Deployment environment - `dev`, `staging`, `prod`, `test` (default: `dev`)
+- `X-Log-Level`: Log severity - `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`, `TRACE` (default: `INFO`)
+- `X-Event-Type`: Event type - `access`, `error`, `audit`, `validation`, `performance`, `security` (default: `access`)
+- `X-Event-Category`: Event category - `application`, `authentication`, `database`, `api`, `security`, `infrastructure` (default: `api`)
+- `X-Event-Domain`: Event domain - `auth`, `frontend`, `backend` (default: `backend`)
 
 ### Quick API Tests
 
@@ -198,11 +225,39 @@ uv run uvicorn src.fastapi_otel_logging:app --host 0.0.0.0 --port 8000 --reload
 # Health check
 curl http://localhost:8000/healthz
 
-# Log a message
+# Log a message (basic)
 curl "http://localhost:8000/api/logs?message=hello%20world"
 
-# Capture correlation ID
-curl -s "http://localhost:8000/api/logs?message=test" | jq '.correlation_id'
+# Log a message (with all headers)
+curl -X GET "http://localhost:8000/api/logs?message=User%20authenticated" \
+  -H "X-Service-Name: auth-api" \
+  -H "X-Service-Version: 1.0.0" \
+  -H "X-Environment: prod" \
+  -H "X-Log-Level: INFO" \
+  -H "X-Event-Type: audit" \
+  -H "X-Event-Category: authentication" \
+  -H "X-Event-Domain: auth"
+
+# Capture and display correlation ID
+CORR_ID=$(curl -s "http://localhost:8000/api/logs?message=test" | jq -r '.correlation_id')
+echo "Correlation ID: $CORR_ID"
+
+# Pretty print response
+curl -s "http://localhost:8000/api/logs?message=test" | jq '.'
+
+# Load test (sequential - 5 requests)
+for i in {1..5}; do
+  curl -s "http://localhost:8000/api/logs?message=load_test_$i"
+done
+
+# Load test (parallel - 10 concurrent)
+seq 1 10 | xargs -P 10 -I {} curl -s "http://localhost:8000/api/logs?message=concurrent_{}"
+
+# Search logs by correlation ID in Elasticsearch
+CORR_ID=$(curl -s "http://localhost:8000/api/logs?message=test" | jq -r '.correlation_id')
+curl -X POST http://localhost:9200/otel-logs-*/_search \
+  -H 'Content-Type: application/json' \
+  -d "{\"query\": {\"match\": {\"correlation_id\": \"$CORR_ID\"}}}" | jq '.hits.hits'
 ```
 
 ### Example Log in Elasticsearch
@@ -419,5 +474,4 @@ docker-compose logs -f fastapi_app
 2. **Create Index Pattern:** `otel-logs-*` with timestamp field `@timestamp`
 3. **Browse Logs:** Go to Discover and explore your logs
 4. **Build Dashboards:** Create visualizations of your log data
-
-For detailed API documentation and testing guides, see [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
+5. **View Detailed API Documentation:** See [API_DOCUMENTATION.md](./API_DOCUMENTATION.md) for comprehensive endpoint details, validation rules, request/response examples, and troubleshooting guides
