@@ -28,8 +28,11 @@ class EventDomain(str, Enum):
     """允許的業務或技術領域"""
 
     AUTH = "auth"
-    FRONTEND = "frontend"
-    BACKEND = "backend"
+    SESSION = "session"
+    DICTATION_FRONTEND = "dictation_frontend"
+    DICTATION_BACKEND = "dictation_backend"
+    WORKLIST = "worklist"
+    VIEWER = "viewer"
 
 
 class EventType(str, Enum):
@@ -46,10 +49,10 @@ class EventType(str, Enum):
 class EventCategory(str, Enum):
     """允許的技術分類"""
 
-    APPLICATION = "application"
+    FRONTEND = "frontend"
     AUTHENTICATION = "authentication"
     DATABASE = "database"
-    API = "api"
+    BACKEND = "backend"
     SECURITY = "security"
     INFRASTRUCTURE = "infrastructure"
 
@@ -200,12 +203,11 @@ class LogAttributesEnricher:
         """根據 service.name 推斷 namespace"""
         mapping = {
             "auth": "identity",
-            "user": "identity",
             "session": "identity",
-            "web": "frontend",
-            "app": "frontend",
-            "api": "backend",
-            "service": "backend",
+            "dictation_frontend": "frontend",
+            "dictation_backend": "backend",
+            "worklist": "frontend",
+            "viewer": "frontend",
         }
 
         for key, value in mapping.items():
@@ -219,10 +221,13 @@ class LogAttributesEnricher:
         """根據 event.domain 推斷 event.category"""
         mapping = {
             "auth": "authentication",
-            "frontend": "application",
-            "backend": "api",
+            "session": "backend",
+            "dictation_frontend": "frontend",
+            "dictation_backend": "backend",
+            "worklist": "frontend",
+            "viewer": "frontend",
         }
-        return mapping.get(event_domain, "application")
+        return mapping.get(event_domain, "frontend")
 
 
 def validate_and_enrich_log_record(
