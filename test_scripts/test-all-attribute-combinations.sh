@@ -10,9 +10,9 @@ SERVICE_VERSION="1.0.0"
 # Valid values from log_attributes_validator.py
 ENVIRONMENTS=("dev" "staging" "prod" "test")
 LOG_LEVELS=("DEBUG" "INFO" "WARN" "ERROR" "FATAL" "TRACE")
-EVENT_DOMAINS=("auth" "frontend" "backend")
+EVENT_DOMAINS=("auth" "session" "dictation_frontend" "dictation_backend" "worklist" "viewer")
 EVENT_TYPES=("access" "error" "audit" "validation" "performance" "security")
-EVENT_CATEGORIES=("application" "authentication" "database" "api" "security" "infrastructure")
+EVENT_CATEGORIES=("frontend" "authentication" "database" "backend" "security" "infrastructure")
 
 # Color codes for output
 RED='\033[0;31m'

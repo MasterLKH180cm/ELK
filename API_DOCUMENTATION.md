@@ -181,8 +181,8 @@ Submit a log message with comprehensive OpenTelemetry instrumentation, automatic
 | `X-Environment` | string | `dev`, `staging`, `prod`, `test` | `dev` (from env) | Deployment environment |
 | `X-Log-Level` | string | `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`, `TRACE` | `INFO` | Severity level of the log |
 | `X-Event-Type` | string | `access`, `error`, `audit`, `validation`, `performance`, `security` | `access` | Type of event being logged |
-| `X-Event-Category` | string | `application`, `authentication`, `database`, `api`, `security`, `infrastructure` | `api` | Technical category of the event |
-| `X-Event-Domain` | string | `auth`, `frontend`, `backend` | `backend` | Business or technical domain |
+| `X-Event-Category` | string | `frontend`, `authentication`, `database`, `backend`, `security`, `infrastructure` | `backend` | Technical category of the event |
+| `X-Event-Domain` | string | `auth`, `session`, `dictation_frontend`, `dictation_backend`, `worklist`, `viewer` | `auth` | Business or technical domain |
 | `Content-Type` | string | `application/json` | Optional | HTTP content type hint |
 
 #### Request Examples
@@ -319,8 +319,8 @@ seq 1 10 | xargs -P 10 -I {} curl -s "http://localhost:8000/api/logs?message=tes
 **Mandatory Attributes** (automatically enforced):
 - `service.name` - Must not be empty
 - `deployment.environment` - Must be one of: `dev`, `staging`, `prod`, `test`
-- `log.level` - Must be one of: `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`, `TRACE`
-- `event.domain` - Must be one of: `auth`, `frontend`, `backend`
+- `log.level` - Must be one of: `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`, `TRACE`
+- `event.domain` - Must be one of: `auth`, `session`, `dictation_frontend`, `dictation_backend`, `worklist`, `viewer`
 - `event.type` - Must be one of: `access`, `error`, `audit`, `validation`, `performance`, `security`
 
 **Forbidden Keywords** (automatically redacted for PII protection):
