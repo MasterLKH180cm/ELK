@@ -36,6 +36,10 @@ services:
     command: ["--config=/etc/otel-collector-config.yml"]
     volumes:
       - ./otel-collector/config.yml:/etc/otel-collector-config.yml:ro
+    environment:
+      # Azure Event Hub connection string for receiving App Service logs
+      # Format: Endpoint=sb://<namespace>.servicebus.windows.net/;SharedAccessKeyName=<policy>;SharedAccessKey=<key>;EntityPath=<eventhub>
+      - AZURE_EVENTHUB_CONNECTION_STRING=${AZURE_EVENTHUB_CONNECTION_STRING:-}
     ports:
       - "4317:4317"
       - "4318:4318"

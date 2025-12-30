@@ -9,6 +9,20 @@ receivers:
         endpoint: "0.0.0.0:4317"
       http:
         endpoint: "0.0.0.0:4318"
+  
+  # Azure Event Hub receiver for Azure App Service logs
+  # Prerequisites:
+  # 1. Create an Azure Event Hub namespace and Event Hub
+  # 2. Configure Azure App Service Diagnostic Settings to stream logs to Event Hub
+  # 3. Get the connection string from Event Hub > Shared access policies
+  azureeventhub:
+    connection: ${env:AZURE_EVENTHUB_CONNECTION_STRING}
+    # Format: Endpoint=sb://<namespace>.servicebus.windows.net/;SharedAccessKeyName=<policy>;SharedAccessKey=<key>;EntityPath=<eventhub>
+    # Optional: specify partition for parallel processing
+    # partition: "0"
+    # Optional: specify offset to start from
+    # offset: "@latest"
+    format: "azure"  # Parse Azure diagnostic logs format
 
 processors:
   memory_limiter:
@@ -111,6 +125,14 @@ exporters:
     topic: otel-logs-default
     encoding: otlp_json
 
+  kafka/logs-azure:
+    brokers:
+      - kafka:29092
+    protocol_version: "2.6.0"
+    client_id: "otel-collector-logs-azure"
+    topic: otel-logs-azure
+    encoding: otlp_json
+
 service:
   extensions: [health_check]
   pipelines:
@@ -144,3 +166,9 @@ service:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection, filter/logs-default, batch]
       exporters: [kafka/logs-default]
+
+    # Pipeline for Azure App Service logs from Event Hub
+    logs/azure:
+      receivers: [azureeventhub]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [debug, kafka/logs-azure]
