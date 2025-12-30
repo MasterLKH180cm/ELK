@@ -10,19 +10,22 @@ receivers:
       http:
         endpoint: "0.0.0.0:4318"
   
-  # Azure Event Hub receiver for Azure App Service logs
-  # Prerequisites:
-  # 1. Create an Azure Event Hub namespace and Event Hub
-  # 2. Configure Azure App Service Diagnostic Settings to stream logs to Event Hub
-  # 3. Get the connection string from Event Hub > Shared access policies
-  azureeventhub:
-    connection: ${env:AZURE_EVENTHUB_CONNECTION_STRING}
-    # Format: Endpoint=sb://<namespace>.servicebus.windows.net/;SharedAccessKeyName=<policy>;SharedAccessKey=<key>;EntityPath=<eventhub>
-    # Optional: specify partition for parallel processing
-    # partition: "0"
-    # Optional: specify offset to start from
+  # OHIF Logs
+  azureeventhub/ohif:
+    connection: ${env:AZURE_EVENTHUB_CONNECTION_STRING_OHIF}
+    format: "azure"
+    # partition: "0" # Optional: set if needed for high throughput
     # offset: "@latest"
-    format: "azure"  # Parse Azure diagnostic logs format
+
+  # Dictation Backend Logs
+  azureeventhub/dictation_backend:
+    connection: ${env:AZURE_EVENTHUB_CONNECTION_STRING_DICTATION_BACKEND}
+    format: "azure"
+
+  # Dictation Frontend Logs
+  azureeventhub/dictation_frontend:
+    connection: ${env:AZURE_EVENTHUB_CONNECTION_STRING_DICTATION_FRONTEND}
+    format: "azure"
 
 processors:
   memory_limiter:
@@ -34,44 +37,53 @@ processors:
     detectors: [env, system]
     override: false
 
+  # Add attributes for routing and identification
   transform:
     log_statements:
       - context: log
         statements:
           - set(attributes["log.level"], severity_text)
           - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
-          - set(attributes["log.route"], "default")
-  filter/logs-auth:
-    error_mode: ignore
-    logs:
-      log_record:
-        - 'attributes["event.domain"] != "auth"'
+          
+          # Tag Azure sources based on scoping (receivers will tag via resource processors if possible, but here we can't easily distinguish receiver in transform unless we use separate pipelines with resource processors)
+          # Better approach: Use resource processors in distinct pipelines. See 'service' section.
 
-  filter/logs-frontend:
-    error_mode: ignore
-    logs:
-      log_record:
-        - 'attributes["event.domain"] != "frontend"'
-
-  filter/logs-backend:
-    error_mode: ignore
-    logs:
-      log_record:
-        - 'attributes["event.domain"] != "backend"'
-  filter/logs-default:
-    error_mode: ignore
-    logs:
-      log_record:
-        - 'attributes["event.domain"] == "frontend"'
-        - 'attributes["event.domain"] == "auth"'
-        - 'attributes["event.domain"] == "backend"'
-  probabilistic_sampler:
-    sampling_percentage: 100
-
+  # General attributes batching
   batch:
     send_batch_size: 256
     timeout: 2s
     send_batch_max_size: 1024
+
+  # Resource processors for each pipeline to tag source
+  resource/ohif:
+    attributes:
+      - key: event.domain
+        value: "ohif"
+        action: upsert
+      - key: service.name
+        value: "ohif-service"
+        action: upsert
+
+  resource/dictation_backend:
+    attributes:
+      - key: event.domain
+        value: "dictation-backend"
+        action: upsert
+      - key: service.name
+        value: "dictation-backend"
+        action: upsert
+  
+  resource/dictation_frontend:
+    attributes:
+      - key: event.domain
+        value: "dictation-frontend"
+        action: upsert
+      - key: service.name
+        value: "dictation-frontend"
+        action: upsert
+
+  # Filter processors for internal routing (if needed to prevent cross-talk in default pipeline)
+  # But with separate pipelines, we don't strictly need complex filters.
 
 exporters:
   debug:
@@ -93,28 +105,21 @@ exporters:
     topic: otel-metrics
     encoding: otlp_json
 
-  kafka/logs-auth:
+  # Exporters for specific log domains
+  kafka/logs-ohif:
     brokers:
       - kafka:29092
     protocol_version: "2.6.0"
-    client_id: "otel-collector-logs-auth"
-    topic: otel-logs-auth
+    client_id: "otel-collector-logs-ohif"
+    topic: otel-logs-ohif
     encoding: otlp_json
 
-  kafka/logs-frontend:
+  kafka/logs-dictation:
     brokers:
       - kafka:29092
     protocol_version: "2.6.0"
-    client_id: "otel-collector-logs-frontend"
-    topic: otel-logs-frontend
-    encoding: otlp_json
-
-  kafka/logs-backend:
-    brokers:
-      - kafka:29092
-    protocol_version: "2.6.0"
-    client_id: "otel-collector-logs-backend"
-    topic: otel-logs-backend
+    client_id: "otel-collector-logs-dictation"
+    topic: otel-logs-dictation
     encoding: otlp_json
 
   kafka/logs-default:
@@ -125,21 +130,12 @@ exporters:
     topic: otel-logs-default
     encoding: otlp_json
 
-  kafka/logs-azure:
-    brokers:
-      - kafka:29092
-    protocol_version: "2.6.0"
-    client_id: "otel-collector-logs-azure"
-    topic: otel-logs-azure
-    encoding: otlp_json
-
 service:
   extensions: [health_check]
   pipelines:
     traces:
       receivers: [otlp]
-      processors:
-        [memory_limiter, resourcedetection, probabilistic_sampler, batch]
+      processors: [memory_limiter, resourcedetection, batch]
       exporters: [debug, kafka/traces]
 
     metrics:
@@ -147,28 +143,31 @@ service:
       processors: [memory_limiter, resourcedetection, batch]
       exporters: [debug, kafka/metrics]
 
-    logs/frontend:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, filter/logs-frontend, batch]
-      exporters: [kafka/logs-frontend]
+    # Pipeline for OHIF (EventHub)
+    logs/ohif:
+      receivers: [azureeventhub/ohif]
+      processors: [memory_limiter, resource/ohif, batch]
+      exporters: [kafka/logs-ohif]
 
-    logs/auth:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, filter/logs-auth, batch]
-      exporters: [kafka/logs-auth]
+    # Pipeline for Dictation Backend (EventHub)
+    logs/dictation_backend:
+      receivers: [azureeventhub/dictation_backend]
+      processors: [memory_limiter, resource/dictation_backend, batch]
+      # Using shared dictation topic or could split further. Let's start with shared 'otel-logs-dictation'
+      exporters: [kafka/logs-dictation]
 
-    logs/backend:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, filter/logs-backend, batch]
-      exporters: [kafka/logs-backend]
+    # Pipeline for Dictation Frontend (EventHub)
+    logs/dictation_frontend:
+      receivers: [azureeventhub/dictation_frontend]
+      processors: [memory_limiter, resource/dictation_frontend, batch]
+      exporters: [kafka/logs-dictation]
 
+    # Pipeline for General OTLP Logs (Browser/FastAPI)
+    # These usually carry their own attributes, just pass through to default or route if needed
     logs/default:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, filter/logs-default, batch]
+      # We rely on the app to set attributes. If we want to route based on attributes, we need the Routing Processor or multiple exporters with filters.
+      # For now, dump to default log topic, Logstash can sort it out, OR we can route here.
+      # Given the user request for optimization, let's keep it simple: dump to otel-logs-default
+      processors: [memory_limiter, resourcedetection, transform, batch]
       exporters: [kafka/logs-default]
-
-    # Pipeline for Azure App Service logs from Event Hub
-    logs/azure:
-      receivers: [azureeventhub]
-      processors: [memory_limiter, resourcedetection, batch]
-      exporters: [debug, kafka/logs-azure]

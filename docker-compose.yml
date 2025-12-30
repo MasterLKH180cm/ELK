@@ -37,9 +37,9 @@ services:
     volumes:
       - ./otel-collector/config.yml:/etc/otel-collector-config.yml:ro
     environment:
-      # Azure Event Hub connection string for receiving App Service logs
-      # Format: Endpoint=sb://<namespace>.servicebus.windows.net/;SharedAccessKeyName=<policy>;SharedAccessKey=<key>;EntityPath=<eventhub>
-      - AZURE_EVENTHUB_CONNECTION_STRING=${AZURE_EVENTHUB_CONNECTION_STRING:-}
+      - AZURE_EVENTHUB_CONNECTION_STRING_OHIF=${AZURE_EVENTHUB_CONNECTION_STRING_OHIF:-}
+      - AZURE_EVENTHUB_CONNECTION_STRING_DICTATION_BACKEND=${AZURE_EVENTHUB_CONNECTION_STRING_DICTATION_BACKEND:-}
+      - AZURE_EVENTHUB_CONNECTION_STRING_DICTATION_FRONTEND=${AZURE_EVENTHUB_CONNECTION_STRING_DICTATION_FRONTEND:-}
     ports:
       - "4317:4317"
       - "4318:4318"
@@ -96,6 +96,9 @@ services:
       - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
       - SERVER_NAME=kibana
       - SERVER_HOST=0.0.0.0
+      - XPACK_SECURITY_ENCRYPTIONKEY=${XPACK_SECURITY_ENCRYPTIONKEY:-kibana_encryption_key_at_least_32_chars_long}
+      - XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY=${XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY:-kibana_encryption_key_at_least_32_chars_long}
+      - XPACK_REPORTING_ENCRYPTIONKEY=${XPACK_REPORTING_ENCRYPTIONKEY:-kibana_encryption_key_at_least_32_chars_long}
     volumes:
       - ./kibana/config/kibana.yml:/usr/share/kibana/config/kibana.yml:ro
       - ./scripts/init-kibana.sh:/usr/local/bin/init-kibana.sh:ro
