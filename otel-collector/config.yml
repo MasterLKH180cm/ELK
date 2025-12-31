@@ -9,7 +9,7 @@ receivers:
         endpoint: "0.0.0.0:4317"
       http:
         endpoint: "0.0.0.0:4318"
-  
+
   # OHIF Logs
   azureeventhub/ohif:
     connection: ${env:AZURE_EVENTHUB_CONNECTION_STRING_OHIF}
@@ -43,9 +43,9 @@ processors:
       - context: log
         statements:
           - set(attributes["log.level"], severity_text)
-          - set(attributes["event.domain"], resource["event.domain"]) where attributes["event.domain"] == nil and resource["event.domain"] != nil
+          - set(attributes["event.domain"], resource.attributes["event.domain"]) where attributes["event.domain"] == nil and resource.attributes["event.domain"] != nil
           - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
-          
+
           # Tag Azure sources based on scoping (receivers will tag via resource processors if possible, but here we can't easily distinguish receiver in transform unless we use separate pipelines with resource processors)
           # Better approach: Use resource processors in distinct pipelines. See 'service' section.
 
@@ -73,7 +73,7 @@ processors:
       - key: service.name
         value: "dictation_backend"
         action: upsert
-  
+
   resource/dictation_frontend:
     attributes:
       - key: event.domain
@@ -208,8 +208,6 @@ exporters:
     topic: otel-logs-viewer
     encoding: otlp_json
 
-
-
 service:
   extensions: [health_check]
   pipelines:
@@ -245,37 +243,37 @@ service:
     # Pipelines for Specific Domains (Filtered from OTLP)
     logs/auth:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, transform, filter/auth, batch]
+      processors:
+        [memory_limiter, resourcedetection, transform, filter/auth, batch]
       exporters: [kafka/logs-auth]
 
     logs/session:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, transform, filter/session, batch]
+      processors:
+        [memory_limiter, resourcedetection, transform, filter/session, batch]
       exporters: [kafka/logs-session]
 
     logs/worklist:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, transform, filter/worklist, batch]
+      processors:
+        [memory_limiter, resourcedetection, transform, filter/worklist, batch]
       exporters: [kafka/logs-worklist]
 
     logs/viewer:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, transform, filter/viewer, batch]
+      processors:
+        [memory_limiter, resourcedetection, transform, filter/viewer, batch]
       exporters: [kafka/logs-viewer]
-
-    logs/trace:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, transform, filter/trace, batch]
-      exporters: [kafka/logs-trace]
-
-    logs/metrics:
-      receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, transform, filter/metrics, batch]
-      exporters: [kafka/logs-metrics]
-
 
     # Pipeline for Default/Fallback Logs
     logs/default:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, transform, filter/default_exclude, batch]
+      processors:
+        [
+          memory_limiter,
+          resourcedetection,
+          transform,
+          filter/default_exclude,
+          batch,
+        ]
       exporters: [kafka/logs-default]
