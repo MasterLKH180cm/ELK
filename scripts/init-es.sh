@@ -1,418 +1,294 @@
 #!/bin/bash
 
-# =====================================================================
-# Elasticsearch Initialization Script
-# =====================================================================
-# Purpose: Configure Elasticsearch with ILM policies, component templates,
-#          index templates, and data streams from configuration files
-#
-# Features:
-# - Configuration-driven approach using JSON config files
-# - Idempotent operations (safe to run multiple times)
-# - Comprehensive validation and error handling
-# - Dry-run mode support (DRY_RUN=true)
-# - Verbose logging (VERBOSE=true)
-# =====================================================================
+# Elasticsearch 初始化腳本 - 在容器啟動時執行
+# 用於設置索引模板和 ILM 政策
 
 set -e
 
-# =====================================================================
-# Configuration
-# =====================================================================
+ES_HOST="http://elasticsearch:9200"
+MAX_ATTEMPTS=30
+ATTEMPT=0
 
-ES_HOST="${ES_HOST:-http://elasticsearch:9200}"
-MAX_ATTEMPTS="${MAX_ATTEMPTS:-30}"
-CONFIG_DIR="/usr/share/elasticsearch/config"
-DRY_RUN="${DRY_RUN:-false}"
-VERBOSE="${VERBOSE:-false}"
+echo "⏳ 等待 Elasticsearch 就緒..."
 
-# =====================================================================
-# Logging Functions
-# =====================================================================
-
-log_info() {
-    echo "ℹ️  $1"
-}
-
-log_success() {
-    echo "✅ $1"
-}
-
-log_warning() {
-    echo "⚠️  $1"
-}
-
-log_error() {
-    echo "❌ $1" >&2
-}
-
-log_debug() {
-    if [ "$VERBOSE" = "true" ]; then
-        echo "🔍 DEBUG: $1"
+# 等待 Elasticsearch 啟動
+while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+    if curl -s -f "$ES_HOST/_cluster/health" > /dev/null 2>&1; then
+        echo "✅ Elasticsearch 已就緒"
+        break
     fi
-}
+    ATTEMPT=$((ATTEMPT + 1))
+    echo "⏳ 嘗試 $ATTEMPT/$MAX_ATTEMPTS... 等待中"
+    sleep 2
+done
 
-log_step() {
-    echo ""
-    echo "═══════════════════════════════════════════════════"
-    echo "  $1"
-    echo "═══════════════════════════════════════════════════"
-    echo ""
-}
+if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+    echo "❌ Elasticsearch 啟動超時"
+    exit 1
+fi
 
-# =====================================================================
-# Utility Functions
-# =====================================================================
+echo ""
+echo "🔧 設置 Elasticsearch 索引和 ILM 政策..."
+echo ""
 
-wait_for_elasticsearch() {
-    local attempt=0
-    
-    log_info "Waiting for Elasticsearch to be ready..."
-    
-    while [ $attempt -lt $MAX_ATTEMPTS ]; do
-        if curl -s -f "$ES_HOST/_cluster/health" > /dev/null 2>&1; then
-            log_success "Elasticsearch is ready"
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        log_info "Attempt $attempt/$MAX_ATTEMPTS... waiting"
-        sleep 2
-    done
-    
-    log_error "Elasticsearch startup timeout after $MAX_ATTEMPTS attempts"
-    return 1
-}
-
-validate_json() {
-    local file=$1
-    
-    if [ ! -f "$file" ]; then
-        log_error "Configuration file not found: $file"
-        return 1
-    fi
-    
-    if ! jq empty "$file" 2>/dev/null; then
-        log_error "Invalid JSON in file: $file"
-        return 1
-    fi
-    
-    log_debug "Valid JSON: $file"
-    return 0
-}
-
-api_call() {
-    local method=$1
-    local endpoint=$2
-    local data=$3
-    local description=$4
-    
-    if [ "$DRY_RUN" = "true" ]; then
-        log_info "[DRY-RUN] $method $endpoint"
-        log_debug "Data: $data"
-        return 0
-    fi
-    
-    local response
-    local http_code
-    
-    if [ -n "$data" ]; then
-        response=$(curl -s -w "\n%{http_code}" -X "$method" "$ES_HOST$endpoint" \
-            -H "Content-Type: application/json" \
-            -d "$data" 2>&1)
-    else
-        response=$(curl -s -w "\n%{http_code}" -X "$method" "$ES_HOST$endpoint" \
-            -H "Content-Type: application/json" 2>&1)
-    fi
-    
-    http_code=$(echo "$response" | tail -n1)
-    local body=$(echo "$response" | head -n -1)
-    
-    log_debug "HTTP $http_code: $description"
-    
-    if [[ "$http_code" =~ ^(200|201)$ ]]; then
-        return 0
-    elif [ "$http_code" = "409" ]; then
-        log_debug "Resource already exists (409)"
-        return 0
-    else
-        log_debug "Response body: $body"
-        return 1
-    fi
-}
-
-resource_exists() {
-    local endpoint=$1
-    
-    local response=$(curl -s "$ES_HOST$endpoint" 2>/dev/null)
-    
-    if echo "$response" | grep -q "error"; then
-        return 1
-    fi
-    
-    if [ -n "$response" ] && [ "$response" != "{}" ]; then
-        return 0
-    fi
-    
-    return 1
-}
-
-# =====================================================================
-# ILM Policy Management
-# =====================================================================
+# ===== 建立 ILM 政策 =====
 
 create_ilm_policy() {
-    local policy_name=$1
-    local policy_json=$2
-    
-    log_info "Processing ILM policy: $policy_name"
-    
-    if resource_exists "/_ilm/policy/$policy_name"; then
-        log_info "  Already exists, skipping"
-        return 0
-    fi
-    
-    if api_call "PUT" "/_ilm/policy/$policy_name" "$policy_json" "Create ILM policy"; then
-        log_success "  Created"
-    else
-        log_error "  Failed to create"
-        return 1
-    fi
-}
+    local POLICY_NAME=$1
+    local HOT_DAYS=${2:-30}
+    local DELETE_DAYS=${3:-90}
 
-process_ilm_policies() {
-    local config_file="$CONFIG_DIR/elasticsearch/ilm-policies.json"
-    
-    log_step "ILM Policies"
-    
-    if ! validate_json "$config_file"; then
-        return 1
-    fi
-    
-    local policies=$(jq -r '.policies[] | @json' "$config_file")
-    
-    while IFS= read -r policy; do
-        local name=$(echo "$policy" | jq -r '.name')
-        local description=$(echo "$policy" | jq -r '.description')
-        
-        log_debug "Description: $description"
-        
-        local policy_json=$(echo "$policy" | jq '{policy: {phases: .phases}}')
-        
-        create_ilm_policy "$name" "$policy_json"
-    done <<< "$policies"
-}
+    echo "📌 檢查 ILM 政策: $POLICY_NAME"
 
-# =====================================================================
-# Component Template Management
-# =====================================================================
-
-create_component_template() {
-    local template_name=$1
-    local template_json=$2
+    # Check if policy exists
+    EXISTING=$(curl -s "$ES_HOST/_ilm/policy/$POLICY_NAME" 2>/dev/null)
     
-    log_info "Processing component template: $template_name"
-    
-    if resource_exists "/_component_template/$template_name"; then
-        log_info "  Already exists, skipping"
-        return 0
-    fi
-    
-    if api_call "PUT" "/_component_template/$template_name" "$template_json" "Create component template"; then
-        log_success "  Created"
-    else
-        log_error "  Failed to create"
-        return 1
-    fi
-}
-
-process_component_templates() {
-    local config_file="$CONFIG_DIR/elasticsearch/component-templates.json"
-    
-    log_step "Component Templates"
-    
-    if ! validate_json "$config_file"; then
-        return 1
-    fi
-    
-    local templates=$(jq -r '.component_templates[] | @json' "$config_file")
-    
-    while IFS= read -r template; do
-        local name=$(echo "$template" | jq -r '.name')
-        local description=$(echo "$template" | jq -r '.description')
+    if echo "$EXISTING" | grep -q "$POLICY_NAME"; then
+        # Extract existing config
+        EXISTING_HOT=$(echo "$EXISTING" | grep -o '"warm":{"min_age":"[0-9]*d"' | grep -o '[0-9]*' || echo "")
+        EXISTING_DELETE=$(echo "$EXISTING" | grep -o '"delete":{"min_age":"[0-9]*d"' | grep -o '[0-9]*' || echo "")
         
-        log_debug "Description: $description"
-        
-        local template_json=$(echo "$template" | jq '{template: .template}')
-        
-        create_component_template "$name" "$template_json"
-    done <<< "$templates"
-}
-
-# =====================================================================
-# Index Template Management
-# =====================================================================
-
-create_index_template() {
-    local template_name=$1
-    local index_pattern=$2
-    local ilm_policy=$3
-    local priority=$4
-    
-    log_info "Processing index template: $template_name ($index_pattern)"
-    
-    if resource_exists "/_index_template/$template_name"; then
-        log_info "  Already exists, skipping"
-        return 0
+        if [ "$EXISTING_HOT" = "$HOT_DAYS" ] && [ "$EXISTING_DELETE" = "$DELETE_DAYS" ]; then
+            echo "  ⏭️  已存在相同設定，跳過"
+            return 0
+        else
+            echo "  🔄 設定不同，更新中..."
+        fi
     fi
-    
-    local template_json=$(cat <<EOF
-{
-  "index_patterns": ["$index_pattern"],
-  "data_stream": {},
-  "composed_of": ["logs-mapping", "logs-settings"],
-  "priority": $priority,
-  "template": {
-    "settings": {
-      "index.lifecycle.name": "$ilm_policy"
+
+    RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_ilm/policy/$POLICY_NAME" \
+        -H "Content-Type: application/json" \
+        -d "{
+  \"policy\": {
+    \"phases\": {
+      \"hot\": {
+        \"min_age\": \"0d\",
+        \"actions\": {
+          \"rollover\": {
+            \"max_primary_store_size\": \"50GB\",
+            \"max_age\": \"1d\"
+          },
+          \"set_priority\": {
+            \"priority\": 100
+          }
+        }
+      },
+      \"warm\": {
+        \"min_age\": \"${HOT_DAYS}d\",
+        \"actions\": {
+          \"set_priority\": {
+            \"priority\": 50
+          }
+        }
+      },
+      \"cold\": {
+        \"min_age\": \"$((DELETE_DAYS - 30))d\",
+        \"actions\": {
+          \"set_priority\": {
+            \"priority\": 0
+          }
+        }
+      },
+      \"delete\": {
+        \"min_age\": \"${DELETE_DAYS}d\",
+        \"actions\": {
+          \"delete\": {}
+        }
+      }
     }
   }
-}
-EOF
-)
+}")
     
-    if api_call "PUT" "/_index_template/$template_name" "$template_json" "Create index template"; then
-        log_success "  Created"
+    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+    
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "  ✅ 已建立/更新"
     else
-        log_error "  Failed to create"
-        return 1
+        echo "  ❌ 失敗 (HTTP $HTTP_CODE)"
+        echo "$RESPONSE"
     fi
 }
 
-process_index_templates() {
-    local config_file="$CONFIG_DIR/elasticsearch/index-templates.json"
-    
-    log_step "Index Templates"
-    
-    if ! validate_json "$config_file"; then
-        return 1
+# ===== 建立通用映射元件 =====
+
+echo "📌 檢查通用映射元件"
+
+# Check if component template exists
+EXISTING=$(curl -s "$ES_HOST/_component_template/logs-mapping" 2>/dev/null)
+
+if echo "$EXISTING" | grep -q '"logs-mapping"' && echo "$EXISTING" | grep -q '"strings_as_keywords"'; then
+    echo "  ⏭️  已存在相同設定，跳過"
+else
+    if echo "$EXISTING" | grep -q '"logs-mapping"'; then
+        echo "  🔄 設定不同，更新中..."
     fi
     
-    local templates=$(jq -r '.index_templates[] | @json' "$config_file")
+    RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_component_template/logs-mapping" \
+    -H "Content-Type: application/json" \
+    -d '{
+  "template": {
+    "mappings": {
+      "dynamic": true,
+      "dynamic_templates": [
+        {
+          "strings_as_keywords": {
+            "match_mapping_type": "string",
+            "mapping": {
+              "type": "keyword"
+            }
+          }
+        }
+      ]
+    }
+  }
+}')
+
+    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "  ✅ 已建立/更新"
+    else
+        echo "  ❌ 失敗 (HTTP $HTTP_CODE)"
+        echo "$RESPONSE"
+    fi
+fi
+
+# ===== 建立索引模板 =====
+
+create_index_template() {
+    local TEMPLATE_NAME=$1
+    local INDEX_PATTERN=$2
+    local ILM_POLICY=$3
+
+    echo "📌 檢查索引模板: $TEMPLATE_NAME (pattern: $INDEX_PATTERN)"
+
+    # Check if index template exists with same config
+    EXISTING=$(curl -s "$ES_HOST/_index_template/$TEMPLATE_NAME" 2>/dev/null)
     
-    while IFS= read -r template; do
-        local name=$(echo "$template" | jq -r '.name')
-        local index_pattern=$(echo "$template" | jq -r '.index_pattern')
-        local ilm_policy=$(echo "$template" | jq -r '.ilm_policy')
-        local priority=$(echo "$template" | jq -r '.priority')
-        local description=$(echo "$template" | jq -r '.description')
+    if echo "$EXISTING" | grep -q "$TEMPLATE_NAME"; then
+        EXISTING_PATTERN=$(echo "$EXISTING" | grep -o "\"index_patterns\":\[\"[^\"]*\"\]" || echo "")
+        EXISTING_ILM=$(echo "$EXISTING" | grep -o "\"index.lifecycle.name\":\"[^\"]*\"" || echo "")
         
-        log_debug "Description: $description"
-        
-        create_index_template "$name" "$index_pattern" "$ilm_policy" "$priority"
-    done <<< "$templates"
+        if echo "$EXISTING_PATTERN" | grep -q "$INDEX_PATTERN" && echo "$EXISTING_ILM" | grep -q "$ILM_POLICY"; then
+            echo "  ⏭️  已存在相同設定，跳過"
+            return 0
+        else
+            echo "  🔄 設定不同，更新中..."
+        fi
+    fi
+
+    RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_index_template/$TEMPLATE_NAME" \
+        -H "Content-Type: application/json" \
+        -d "{
+  \"index_patterns\": [\"$INDEX_PATTERN\"],
+  \"data_stream\": { },
+  \"composed_of\": [\"logs-mapping\"],
+  \"priority\": 200,
+  \"template\": {
+    \"settings\": {
+      \"number_of_shards\": 1,
+      \"number_of_replicas\": 0,
+      \"index.lifecycle.name\": \"$ILM_POLICY\",
+      \"index.mapping.total_fields.limit\": 2000
+    },
+    \"mappings\": {
+      \"properties\": {
+        \"@timestamp\": { \"type\": \"date\" },
+        \"service.name\": { \"type\": \"keyword\" },
+        \"service.namespace\": { \"type\": \"keyword\" },
+        \"deployment.environment\": { \"type\": \"keyword\" },
+        \"log.level\": { \"type\": \"keyword\" },
+        \"event.domain\": { \"type\": \"keyword\" },
+        \"event.type\": { \"type\": \"keyword\" },
+        \"event.category\": { \"type\": \"keyword\" },
+        \"event.duration_ms\": { \"type\": \"double\" },
+        \"event.outcome\": { \"type\": \"keyword\" },
+        \"trace.id\": { \"type\": \"keyword\" },
+        \"span.id\": { \"type\": \"keyword\" },
+        \"user.id\": { \"type\": \"keyword\" },
+        \"session.id\": { \"type\": \"keyword\" },
+        \"http.method\": { \"type\": \"keyword\" },
+        \"http.status_code\": { \"type\": \"integer\" },
+        \"http.path\": { \"type\": \"text\" },
+        \"client.ip\": { \"type\": \"ip\" },
+        \"error.type\": { \"type\": \"keyword\" },
+        \"error.message\": { \"type\": \"text\" },
+        \"message\": { \"type\": \"text\" }
+      }
+    }
+  }
+}"
+    )
+
+    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "  ✅ 已建立"
+    else
+        echo "  ❌ 失敗 (HTTP $HTTP_CODE)"
+        echo "$RESPONSE"
+    fi
 }
 
-# =====================================================================
-# Data Stream Management
-# =====================================================================
+# ===== 建立資料流 =====
 
 create_data_stream() {
-    local stream_name=$1
+    local DATA_STREAM_NAME=$1
+
+    echo "📌 檢查資料流: $DATA_STREAM_NAME"
+
+    # Check if data stream already exists
+    EXISTING=$(curl -s "$ES_HOST/_data_stream/$DATA_STREAM_NAME" 2>/dev/null)
     
-    log_info "Processing data stream: $stream_name"
-    
-    if resource_exists "/_data_stream/$stream_name"; then
-        log_info "  Already exists, skipping"
+    if echo "$EXISTING" | grep -q "$DATA_STREAM_NAME"; then
+        echo "  ⏭️  已存在，跳過"
         return 0
     fi
-    
-    if api_call "PUT" "/_data_stream/$stream_name" "" "Create data stream"; then
-        log_success "  Created"
+
+    RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_data_stream/$DATA_STREAM_NAME" \
+        -H "Content-Type: application/json")
+
+    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+        echo "  ✅ 已建立"
     else
-        log_error "  Failed to create"
-        return 1
+        echo "  ⚠️  回應 (HTTP $HTTP_CODE)"
+        echo "$RESPONSE"
     fi
 }
 
-process_data_streams() {
-    local config_file="$CONFIG_DIR/elasticsearch/index-templates.json"
-    
-    log_step "Data Streams"
-    
-    if ! validate_json "$config_file"; then
-        return 1
-    fi
-    
-    local streams=$(jq -r '.index_templates[].data_stream' "$config_file" | sort -u)
-    
-    while IFS= read -r stream; do
-        if [ -n "$stream" ] && [ "$stream" != "null" ]; then
-            create_data_stream "$stream"
-        fi
-    done <<< "$streams"
-}
+# ===== 執行設置 =====
 
-# =====================================================================
-# Validation
-# =====================================================================
+echo ""
 
-validate_configuration() {
-    log_step "Validating Configuration"
-    
-    local valid=true
-    
-    local files=(
-        "$CONFIG_DIR/elasticsearch/ilm-policies.json"
-        "$CONFIG_DIR/elasticsearch/component-templates.json"
-        "$CONFIG_DIR/elasticsearch/index-templates.json"
-    )
-    
-    for file in "${files[@]}"; do
-        if ! validate_json "$file"; then
-            valid=false
-        fi
-    done
-    
-    if [ "$valid" = "false" ]; then
-        log_error "Configuration validation failed"
-        return 1
-    fi
-    
-    log_success "Configuration is valid"
-    return 0
-}
+# 建立 ILM 政策
+create_ilm_policy "logs-retention-30-90" 30 90
+create_ilm_policy "logs-retention-7-30" 7 30
 
-# =====================================================================
-# Main Execution
-# =====================================================================
+echo ""
 
-main() {
-    echo "═══════════════════════════════════════════════════"
-    echo "  Elasticsearch Initialization"
-    echo "═══════════════════════════════════════════════════"
-    echo ""
-    echo "  ES Host: $ES_HOST"
-    echo "  Config Dir: $CONFIG_DIR"
-    echo "  Dry Run: $DRY_RUN"
-    echo "  Verbose: $VERBOSE"
-    echo ""
-    
-    if ! validate_configuration; then
-        exit 1
-    fi
-    
-    if ! wait_for_elasticsearch; then
-        exit 1
-    fi
-    
-    process_ilm_policies || exit 1
-    process_component_templates || exit 1
-    process_index_templates || exit 1
-    process_data_streams || exit 1
-    
-    log_step "Initialization Complete"
-    log_success "All Elasticsearch resources configured successfully!"
-    echo ""
-}
+# 建立索引模板
+create_index_template "logs-auth" "logs-auth-*" "logs-retention-30-90"
+create_index_template "logs-frontend" "logs-frontend-*" "logs-retention-7-30"
+create_index_template "logs-backend" "logs-backend-*" "logs-retention-30-90"
+create_index_template "logs-ohif" "logs-ohif-*" "logs-retention-30-90"
+create_index_template "logs-dictation_backend" "logs-dictation_backend-*" "logs-retention-30-90"
+create_index_template "logs-dictation_frontend" "logs-dictation_frontend-*" "logs-retention-7-30"
+create_index_template "logs-trace" "logs-trace-*" "logs-retention-30-90"
+create_index_template "logs-metrics" "logs-metrics-*" "logs-retention-7-30"
+create_index_template "logs-session" "logs-session-*" "logs-retention-30-90"
+create_index_template "logs-worklist" "logs-worklist-*" "logs-retention-30-90"
+create_index_template "logs-viewer" "logs-viewer-*" "logs-retention-30-90"
+create_index_template "logs-default" "logs-default-*" "logs-retention-30-90"
 
-main
+echo ""
+
+# Note: Data streams are auto-created by Elasticsearch when Logstash sends data
+# No need to pre-create them - they will be created automatically using the index templates
+# Format: logs-{dataset}-default (where dataset comes from event_domain)
+
+echo ""
+echo "✅ Elasticsearch 索引模板和 ILM 政策設置完成！"
+echo "   資料流將在首次接收資料時自動建立"
+echo ""

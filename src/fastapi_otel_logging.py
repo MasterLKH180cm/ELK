@@ -141,6 +141,7 @@ async def get_logs(request: Request, message: Optional[str] = "sample log"):
     log_level = request.headers.get("X-Log-Level", "INFO")
     event_type = request.headers.get("X-Event-Type", "access")
     event_category = request.headers.get("X-Event-Category", "api")
+    event_domain = request.headers.get("X-Event-Domain", "default")
 
     # Create attributes dict for OTEL - these will be converted to log record attributes
     custom_attrs = {
@@ -150,6 +151,7 @@ async def get_logs(request: Request, message: Optional[str] = "sample log"):
         "log.level": log_level,
         "event.type": event_type,
         "event.category": event_category,
+        "event.domain": event_domain,
         "request_message": message,
         "message_length": len(message) if message else 0,
         "correlation_id": correlation_id,
