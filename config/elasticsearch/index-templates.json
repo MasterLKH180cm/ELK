@@ -1,0 +1,100 @@
+{
+  "index_templates": [
+    {
+      "name": "logs-auth",
+      "description": "Authentication and authorization logs",
+      "index_pattern": "logs-auth-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-auth-default"
+    },
+    {
+      "name": "logs-frontend",
+      "description": "Frontend application logs",
+      "index_pattern": "logs-frontend-*",
+      "ilm_policy": "logs-retention-7-30",
+      "priority": 200,
+      "data_stream": "logs-frontend-default"
+    },
+    {
+      "name": "logs-backend",
+      "description": "Backend application logs",
+      "index_pattern": "logs-backend-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-backend-default"
+    },
+    {
+      "name": "logs-ohif",
+      "description": "OHIF viewer logs",
+      "index_pattern": "logs-ohif-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-ohif-default"
+    },
+    {
+      "name": "logs-dictation-backend",
+      "description": "Dictation backend service logs",
+      "index_pattern": "logs-dictation_backend-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-dictation_backend-default"
+    },
+    {
+      "name": "logs-dictation-frontend",
+      "description": "Dictation frontend logs",
+      "index_pattern": "logs-dictation_frontend-*",
+      "ilm_policy": "logs-retention-7-30",
+      "priority": 200,
+      "data_stream": "logs-dictation_frontend-default"
+    },
+    {
+      "name": "logs-trace",
+      "description": "Distributed tracing logs",
+      "index_pattern": "logs-trace-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-trace-default"
+    },
+    {
+      "name": "logs-metrics",
+      "description": "Application metrics logs",
+      "index_pattern": "logs-metrics-*",
+      "ilm_policy": "logs-retention-7-30",
+      "priority": 200,
+      "data_stream": "logs-metrics-default"
+    },
+    {
+      "name": "logs-session",
+      "description": "User session logs",
+      "index_pattern": "logs-session-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-session-default"
+    },
+    {
+      "name": "logs-worklist",
+      "description": "Worklist service logs",
+      "index_pattern": "logs-worklist-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-worklist-default"
+    },
+    {
+      "name": "logs-viewer",
+      "description": "Medical image viewer logs",
+      "index_pattern": "logs-viewer-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 200,
+      "data_stream": "logs-viewer-default"
+    },
+    {
+      "name": "logs-default",
+      "description": "Default fallback for uncategorized logs",
+      "index_pattern": "logs-default-*",
+      "ilm_policy": "logs-retention-30-90",
+      "priority": 100,
+      "data_stream": "logs-default-default"
+    }
+  ]
+}

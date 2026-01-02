@@ -1,0 +1,112 @@
+{
+  "component_templates": [
+    {
+      "name": "logs-mapping",
+      "description": "Common field mappings for all log types",
+      "template": {
+        "mappings": {
+          "dynamic": true,
+          "dynamic_templates": [
+            {
+              "strings_as_keywords": {
+                "match_mapping_type": "string",
+                "mapping": {
+                  "type": "keyword"
+                }
+              }
+            }
+          ],
+          "properties": {
+            "@timestamp": {
+              "type": "date"
+            },
+            "service.name": {
+              "type": "keyword"
+            },
+            "service.namespace": {
+              "type": "keyword"
+            },
+            "service.version": {
+              "type": "keyword"
+            },
+            "deployment.environment": {
+              "type": "keyword"
+            },
+            "log.level": {
+              "type": "keyword"
+            },
+            "event.domain": {
+              "type": "keyword"
+            },
+            "event.type": {
+              "type": "keyword"
+            },
+            "event.category": {
+              "type": "keyword"
+            },
+            "event.duration_ms": {
+              "type": "double"
+            },
+            "event.outcome": {
+              "type": "keyword"
+            },
+            "trace.id": {
+              "type": "keyword"
+            },
+            "span.id": {
+              "type": "keyword"
+            },
+            "user.id": {
+              "type": "keyword"
+            },
+            "session.id": {
+              "type": "keyword"
+            },
+            "http.method": {
+              "type": "keyword"
+            },
+            "http.status_code": {
+              "type": "integer"
+            },
+            "http.path": {
+              "type": "text",
+              "fields": {
+                "keyword": {
+                  "type": "keyword",
+                  "ignore_above": 256
+                }
+              }
+            },
+            "client.ip": {
+              "type": "ip"
+            },
+            "error.type": {
+              "type": "keyword"
+            },
+            "error.message": {
+              "type": "text"
+            },
+            "error.stack_trace": {
+              "type": "text"
+            },
+            "message": {
+              "type": "text"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "logs-settings",
+      "description": "Common index settings for all log types",
+      "template": {
+        "settings": {
+          "number_of_shards": 1,
+          "number_of_replicas": 0,
+          "index.mapping.total_fields.limit": 2000,
+          "index.refresh_interval": "5s"
+        }
+      }
+    }
+  ]
+}

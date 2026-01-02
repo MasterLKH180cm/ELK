@@ -1,0 +1,82 @@
+{
+  "data_views": [
+    {
+      "name": "All Logs",
+      "index_pattern": "logs-*",
+      "time_field": "@timestamp",
+      "description": "All logs across all services"
+    },
+    {
+      "name": "Auth Logs",
+      "index_pattern": "logs-auth-*",
+      "time_field": "@timestamp",
+      "description": "Authentication and authorization logs"
+    },
+    {
+      "name": "Frontend Logs",
+      "index_pattern": "logs-frontend-*",
+      "time_field": "@timestamp",
+      "description": "Frontend application logs"
+    },
+    {
+      "name": "Backend Logs",
+      "index_pattern": "logs-backend-*",
+      "time_field": "@timestamp",
+      "description": "Backend application logs"
+    },
+    {
+      "name": "OHIF Logs",
+      "index_pattern": "logs-ohif-*",
+      "time_field": "@timestamp",
+      "description": "OHIF viewer logs"
+    },
+    {
+      "name": "Dictation Backend Logs",
+      "index_pattern": "logs-dictation_backend-*",
+      "time_field": "@timestamp",
+      "description": "Dictation backend service logs"
+    },
+    {
+      "name": "Dictation Frontend Logs",
+      "index_pattern": "logs-dictation_frontend-*",
+      "time_field": "@timestamp",
+      "description": "Dictation frontend logs"
+    },
+    {
+      "name": "Trace Logs",
+      "index_pattern": "logs-trace-*",
+      "time_field": "@timestamp",
+      "description": "Distributed tracing logs"
+    },
+    {
+      "name": "Metrics Logs",
+      "index_pattern": "logs-metrics-*",
+      "time_field": "@timestamp",
+      "description": "Application metrics logs"
+    },
+    {
+      "name": "Session Logs",
+      "index_pattern": "logs-session-*",
+      "time_field": "@timestamp",
+      "description": "User session logs"
+    },
+    {
+      "name": "Worklist Logs",
+      "index_pattern": "logs-worklist-*",
+      "time_field": "@timestamp",
+      "description": "Worklist service logs"
+    },
+    {
+      "name": "Viewer Logs",
+      "index_pattern": "logs-viewer-*",
+      "time_field": "@timestamp",
+      "description": "Medical image viewer logs"
+    },
+    {
+      "name": "Default Logs",
+      "index_pattern": "logs-default-*",
+      "time_field": "@timestamp",
+      "description": "Uncategorized logs"
+    }
+  ]
+}
