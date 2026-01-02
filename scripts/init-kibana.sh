@@ -37,7 +37,39 @@ create_data_view() {
     local INDEX_PATTERN=$2
     local TIME_FIELD=$3
     
-    echo "📌 Creating data view: $NAME ($INDEX_PATTERN)"
+    echo "📌 Checking data view: $NAME ($INDEX_PATTERN)"
+    
+    # Check if data view with same config already exists
+    EXISTING=$(curl -s -X GET "$KIBANA_HOST/api/saved_objects/_find?type=index-pattern&search_fields=title&search=$INDEX_PATTERN" \
+        -H "kbn-xsrf: true" 2>/dev/null)
+    
+    if echo "$EXISTING" | grep -q "\"title\":\"$INDEX_PATTERN\"" && echo "$EXISTING" | grep -q "\"timeFieldName\":\"$TIME_FIELD\""; then
+        echo "  ⏭️  Already exists with same config, skipping"
+        return 0
+    elif echo "$EXISTING" | grep -q "\"title\":\"$INDEX_PATTERN\""; then
+        # Extract ID and update
+        EXISTING_ID=$(echo "$EXISTING" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+        if [ -n "$EXISTING_ID" ]; then
+            echo "  🔄 Config differs, updating..."
+            RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$KIBANA_HOST/api/saved_objects/index-pattern/$EXISTING_ID" \
+                -H "kbn-xsrf: true" \
+                -H "Content-Type: application/json" \
+                -d "{
+    \"attributes\": {
+        \"name\": \"$NAME\",
+        \"title\": \"$INDEX_PATTERN\",
+        \"timeFieldName\": \"$TIME_FIELD\"
+    }
+}")
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            if [ "$HTTP_CODE" = "200" ]; then
+                echo "  ✅ Updated"
+            else
+                echo "  ⚠️  Update response (HTTP $HTTP_CODE)"
+            fi
+            return 0
+        fi
+    fi
     
     # We use the Saved Objects API to create index-pattern (Data View)
     # This bypasses the UI check for existing indices
@@ -54,8 +86,10 @@ create_data_view() {
     
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     
-    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ] || [ "$HTTP_CODE" = "409" ]; then
-        echo "  ✅ Created (or already exists)"
+    if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
+        echo "  ✅ Created"
+    elif [ "$HTTP_CODE" = "409" ]; then
+        echo "  ⏭️  Already exists"
     else
         echo "  ⚠️  Response (HTTP $HTTP_CODE)"
         echo "$RESPONSE"

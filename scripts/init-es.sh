@@ -38,45 +38,62 @@ create_ilm_policy() {
     local HOT_DAYS=${2:-30}
     local DELETE_DAYS=${3:-90}
 
-    echo "📌 建立 ILM 政策: $POLICY_NAME"
+    echo "📌 檢查 ILM 政策: $POLICY_NAME"
+
+    # Check if policy exists
+    EXISTING=$(curl -s "$ES_HOST/_ilm/policy/$POLICY_NAME" 2>/dev/null)
+    
+    if echo "$EXISTING" | grep -q "$POLICY_NAME"; then
+        # Extract existing config
+        EXISTING_HOT=$(echo "$EXISTING" | grep -o '"warm":{"min_age":"[0-9]*d"' | grep -o '[0-9]*' || echo "")
+        EXISTING_DELETE=$(echo "$EXISTING" | grep -o '"delete":{"min_age":"[0-9]*d"' | grep -o '[0-9]*' || echo "")
+        
+        if [ "$EXISTING_HOT" = "$HOT_DAYS" ] && [ "$EXISTING_DELETE" = "$DELETE_DAYS" ]; then
+            echo "  ⏭️  已存在相同設定，跳過"
+            return 0
+        else
+            echo "  🔄 設定不同，更新中..."
+        fi
+    fi
 
     RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_ilm/policy/$POLICY_NAME" \
         -H "Content-Type: application/json" \
         -d "{
-  \"policy\": \"$POLICY_NAME\",
-  \"phases\": {
-    \"hot\": {
-      \"min_age\": \"0d\",
-      \"actions\": {
-        \"rollover\": {
-          \"max_primary_store_size\": \"50GB\",
-          \"max_age\": \"1d\"
-        },
-        \"set_priority\": {
-          \"priority\": 100
+  \"policy\": {
+    \"phases\": {
+      \"hot\": {
+        \"min_age\": \"0d\",
+        \"actions\": {
+          \"rollover\": {
+            \"max_primary_store_size\": \"50GB\",
+            \"max_age\": \"1d\"
+          },
+          \"set_priority\": {
+            \"priority\": 100
+          }
         }
-      }
-    },
-    \"warm\": {
-      \"min_age\": \"${HOT_DAYS}d\",
-      \"actions\": {
-        \"set_priority\": {
-          \"priority\": 50
+      },
+      \"warm\": {
+        \"min_age\": \"${HOT_DAYS}d\",
+        \"actions\": {
+          \"set_priority\": {
+            \"priority\": 50
+          }
         }
-      }
-    },
-    \"cold\": {
-      \"min_age\": \"$((DELETE_DAYS - 30))d\",
-      \"actions\": {
-        \"set_priority\": {
-          \"priority\": 0
+      },
+      \"cold\": {
+        \"min_age\": \"$((DELETE_DAYS - 30))d\",
+        \"actions\": {
+          \"set_priority\": {
+            \"priority\": 0
+          }
         }
-      }
-    },
-    \"delete\": {
-      \"min_age\": \"${DELETE_DAYS}d\",
-      \"actions\": {
-        \"delete\": {}
+      },
+      \"delete\": {
+        \"min_age\": \"${DELETE_DAYS}d\",
+        \"actions\": {
+          \"delete\": {}
+        }
       }
     }
   }
@@ -85,7 +102,7 @@ create_ilm_policy() {
     HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
     
     if [ "$HTTP_CODE" = "200" ]; then
-        echo "  ✅ 已建立"
+        echo "  ✅ 已建立/更新"
     else
         echo "  ❌ 失敗 (HTTP $HTTP_CODE)"
         echo "$RESPONSE"
@@ -94,8 +111,18 @@ create_ilm_policy() {
 
 # ===== 建立通用映射元件 =====
 
-echo "📌 建立通用映射元件"
+echo "📌 檢查通用映射元件"
 
+# Check if component template exists
+EXISTING=$(curl -s "$ES_HOST/_component_template/logs-mapping" 2>/dev/null)
+
+if echo "$EXISTING" | grep -q '"logs-mapping"' && echo "$EXISTING" | grep -q '"strings_as_keywords"'; then
+    echo "  ⏭️  已存在相同設定，跳過"
+else
+    if echo "$EXISTING" | grep -q '"logs-mapping"'; then
+        echo "  🔄 設定不同，更新中..."
+    fi
+    
     RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_component_template/logs-mapping" \
     -H "Content-Type: application/json" \
     -d '{
@@ -116,13 +143,14 @@ echo "📌 建立通用映射元件"
   }
 }')
 
-HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+    HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
 
-if [ "$HTTP_CODE" = "200" ]; then
-    echo "  ✅ 已建立"
-else
-    echo "  ❌ 失敗 (HTTP $HTTP_CODE)"
-    echo "$RESPONSE"
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "  ✅ 已建立/更新"
+    else
+        echo "  ❌ 失敗 (HTTP $HTTP_CODE)"
+        echo "$RESPONSE"
+    fi
 fi
 
 # ===== 建立索引模板 =====
@@ -132,7 +160,22 @@ create_index_template() {
     local INDEX_PATTERN=$2
     local ILM_POLICY=$3
 
-    echo "📌 建立索引模板: $TEMPLATE_NAME (pattern: $INDEX_PATTERN)"
+    echo "📌 檢查索引模板: $TEMPLATE_NAME (pattern: $INDEX_PATTERN)"
+
+    # Check if index template exists with same config
+    EXISTING=$(curl -s "$ES_HOST/_index_template/$TEMPLATE_NAME" 2>/dev/null)
+    
+    if echo "$EXISTING" | grep -q "$TEMPLATE_NAME"; then
+        EXISTING_PATTERN=$(echo "$EXISTING" | grep -o "\"index_patterns\":\[\"[^\"]*\"\]" || echo "")
+        EXISTING_ILM=$(echo "$EXISTING" | grep -o "\"index.lifecycle.name\":\"[^\"]*\"" || echo "")
+        
+        if echo "$EXISTING_PATTERN" | grep -q "$INDEX_PATTERN" && echo "$EXISTING_ILM" | grep -q "$ILM_POLICY"; then
+            echo "  ⏭️  已存在相同設定，跳過"
+            return 0
+        else
+            echo "  🔄 設定不同，更新中..."
+        fi
+    fi
 
     RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_index_template/$TEMPLATE_NAME" \
         -H "Content-Type: application/json" \
@@ -192,7 +235,15 @@ create_index_template() {
 create_data_stream() {
     local DATA_STREAM_NAME=$1
 
-    echo "📌 建立資料流: $DATA_STREAM_NAME"
+    echo "📌 檢查資料流: $DATA_STREAM_NAME"
+
+    # Check if data stream already exists
+    EXISTING=$(curl -s "$ES_HOST/_data_stream/$DATA_STREAM_NAME" 2>/dev/null)
+    
+    if echo "$EXISTING" | grep -q "$DATA_STREAM_NAME"; then
+        echo "  ⏭️  已存在，跳過"
+        return 0
+    fi
 
     RESPONSE=$(curl -s -w "\n%{http_code}" -X PUT "$ES_HOST/_data_stream/$DATA_STREAM_NAME" \
         -H "Content-Type: application/json")
@@ -202,7 +253,6 @@ create_data_stream() {
     if [ "$HTTP_CODE" = "200" ] || [ "$HTTP_CODE" = "201" ]; then
         echo "  ✅ 已建立"
     else
-        # 400 means it might already exist or match issues, usually harmless if idempotent
         echo "  ⚠️  回應 (HTTP $HTTP_CODE)"
         echo "$RESPONSE"
     fi
@@ -235,19 +285,19 @@ create_index_template "logs-default" "logs-default-*" "logs-retention-30-90"
 echo ""
 
 # 建立資料流 (預先建立)
-# 格式: logs-{dataset}-default
-create_data_stream "logs-auth-data-stream"
-create_data_stream "logs-frontend-data-stream"
-create_data_stream "logs-backend-data-stream"
-create_data_stream "logs-ohif-data-stream"
-create_data_stream "logs-dictation_frontend-data-stream"
-create_data_stream "logs-dictation_backend-data-stream"
-create_data_stream "logs-default-data-stream"
-create_data_stream "logs-trace-data-stream"
-create_data_stream "logs-metrics-data-stream"
-create_data_stream "logs-session-data-stream"
-create_data_stream "logs-worklist-data-stream"
-create_data_stream "logs-viewer-data-stream"
+# 格式: logs-{dataset}-{namespace}
+create_data_stream "logs-auth-default"
+create_data_stream "logs-frontend-default"
+create_data_stream "logs-backend-default"
+create_data_stream "logs-ohif-default"
+create_data_stream "logs-dictation_frontend-default"
+create_data_stream "logs-dictation_backend-default"
+create_data_stream "logs-default-default"
+create_data_stream "logs-trace-default"
+create_data_stream "logs-metrics-default"
+create_data_stream "logs-session-default"
+create_data_stream "logs-worklist-default"
+create_data_stream "logs-viewer-default"
 
 echo ""
 echo "✅ Elasticsearch 索引、ILM 政策和資料流設置完成！"
