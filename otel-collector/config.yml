@@ -45,22 +45,33 @@ processors:
         statements:
           - set(attributes["log.level"], severity_text)
 
-          # For Fluent Bit logs: body is a JSON string, parse it first
+          # Case 1: Body is a JSON string (parse it first)
           # Use cache to store parsed JSON body
           - set(cache["parsed_body"], ParseJSON(body)) where IsString(body)
 
-          # Extract event.domain from parsed body (Fluent Bit JSON string case)
-          - set(attributes["event.domain"], cache["parsed_body"]["event.domain"]) where cache["parsed_body"] != nil and cache["parsed_body"]["event.domain"] != nil
+          # Case 2: Body is already a map (Fluent Bit OTLP direct)
+          # Extract event.domain directly from body map
+          - set(attributes["event.domain"], body["event.domain"]) where IsMap(body) and body["event.domain"] != nil
+
+          # Extract event.domain from parsed JSON body (string case)
+          - set(attributes["event.domain"], cache["parsed_body"]["event.domain"]) where attributes["event.domain"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["event.domain"] != nil
 
           # Then try resource attributes (for SDK-instrumented apps)
           - set(attributes["event.domain"], resource.attributes["event.domain"]) where attributes["event.domain"] == nil and resource.attributes["event.domain"] != nil
 
-          # Extract other useful fields from parsed body
-          - set(attributes["message"], cache["parsed_body"]["log"]) where cache["parsed_body"] != nil and cache["parsed_body"]["log"] != nil
-          - set(attributes["container_name"], cache["parsed_body"]["container_name"]) where cache["parsed_body"] != nil and cache["parsed_body"]["container_name"] != nil
-          - set(attributes["service.namespace"], cache["parsed_body"]["service.namespace"]) where cache["parsed_body"] != nil and cache["parsed_body"]["service.namespace"] != nil
-          - set(attributes["deployment.environment"], cache["parsed_body"]["deployment.environment"]) where cache["parsed_body"] != nil and cache["parsed_body"]["deployment.environment"] != nil
-          - set(attributes["app"], cache["parsed_body"]["app"]) where cache["parsed_body"] != nil and cache["parsed_body"]["app"] != nil
+          # Extract other useful fields from body map (Case 2)
+          - set(attributes["message"], body["log"]) where IsMap(body) and body["log"] != nil
+          - set(attributes["container_name"], body["container_name"]) where IsMap(body) and body["container_name"] != nil
+          - set(attributes["service.namespace"], body["service.namespace"]) where IsMap(body) and body["service.namespace"] != nil
+          - set(attributes["deployment.environment"], body["deployment.environment"]) where IsMap(body) and body["deployment.environment"] != nil
+          - set(attributes["app"], body["app"]) where IsMap(body) and body["app"] != nil
+
+          # Extract other useful fields from parsed JSON body (Case 1)
+          - set(attributes["message"], cache["parsed_body"]["log"]) where attributes["message"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["log"] != nil
+          - set(attributes["container_name"], cache["parsed_body"]["container_name"]) where attributes["container_name"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["container_name"] != nil
+          - set(attributes["service.namespace"], cache["parsed_body"]["service.namespace"]) where attributes["service.namespace"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["service.namespace"] != nil
+          - set(attributes["deployment.environment"], cache["parsed_body"]["deployment.environment"]) where attributes["deployment.environment"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["deployment.environment"] != nil
+          - set(attributes["app"], cache["parsed_body"]["app"]) where attributes["app"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["app"] != nil
 
           # Fallback to default if event.domain still not set
           - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
