@@ -1,0 +1,11 @@
+﻿{"resourceLogs":[{"resource":{"attributes":[{"key":"telemetry.sdk.language","value":{"stringValue":"python"}},{"key":"telemetry.sdk.name","value":{"stringValue":"opentelemetry"}},{"key":"telemetry.sdk.version","value":{"stringValue":"1.39.1"}},{"key":"service.name","value":{"stringValue":"fastapi-otel"}},{"key":"service.instance.id","value":{"stringValue":"eb1b2fd1b3f0"}},{"key":"service.version","value":{"stringValue":"1.0.0"}},{"key":"deployment.environment","value":{"stringValue":"development"}},{"key":"host.name","value":{"stringValue":"eb1b2fd1b3f0"}},{"key":"os.type","value":{"stringValue":"linux"}}]},"scopeLogs":[{"scope":{"name":"src.fastapi_otel_logging"},"logRecords":[{"timeUnixNano":"1767861999225241856","observedTimeUnixNano":"1767861999225283566","severityNumber":9,"severityText":"INFO","body":{"stringValue":"FastAPI service starting up"},"attributes":[{"key":"otelSpanID","value":{"stringValue":"0"}},{"key":"otelTraceID","value":{"stringValue":"0"}},{"key":"otelTraceSampled","value":{"boolValue":false}},{"key":"otelServiceName","value":{"stringValue":"fastapi-otel"}},{"key":"event","value":{"stringValue":"startup"}},{"key":"code.file.path","value":{"stringValue":"/workspace/src/fastapi_otel_logging.py"}},{"key":"code.function.name","value":{"stringValue":"lifespan"}},{"key":"code.line.number","value":{"intValue":"107"}},{"key":"log.level","value":{"stringValue":"INFO"}},{"key":"event.domain","value":{"stringValue":"default"}}]}]}],"schemaUrl":"https://opentelemetry.io/schemas/1.37.0"}]}
+docker : Processed a total of 1 messages
+位於 線路:1 字元:1
++ docker exec kafka kafka-console-consumer --bootstrap-server localho
+st ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo          : NotSpecified: (Processed a total of 1  
+   messages:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

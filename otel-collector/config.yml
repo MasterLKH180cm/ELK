@@ -103,42 +103,45 @@ processors:
         action: upsert
 
   # Filter processors with strict matching using OTTL
+  # IMPORTANT: In OTEL filter processor, TRUE = DROP, FALSE = KEEP
+  # To KEEP auth-session logs, we DROP logs where event.domain != "auth-session"
   filter/auth-session:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] == "auth-session"'
+        - 'attributes["event.domain"] != "auth-session"'
 
   filter/worklist:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] == "worklist"'
+        - 'attributes["event.domain"] != "worklist"'
 
   filter/viewer:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] == "viewer"'
+        - 'attributes["event.domain"] != "viewer"'
 
   filter/trace:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] == "trace"'
+        - 'attributes["event.domain"] != "trace"'
 
   filter/metrics:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] == "metrics"'
+        - 'attributes["event.domain"] != "metrics"'
 
-  # Filter to exclude specific domains from default pipeline to prevent duplication
+  # Filter for default pipeline: DROP logs that belong to specific domains
+  # This KEEPS only logs with event.domain NOT in the list above
   filter/default_exclude:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] != "auth-session" and attributes["event.domain"] != "worklist" and attributes["event.domain"] != "viewer" and attributes["event.domain"] != "trace" and attributes["event.domain"] != "metrics"'
+        - 'attributes["event.domain"] == "auth-session" or attributes["event.domain"] == "worklist" or attributes["event.domain"] == "viewer" or attributes["event.domain"] == "trace" or attributes["event.domain"] == "metrics"'
 
 exporters:
   debug:
