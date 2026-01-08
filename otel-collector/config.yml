@@ -39,21 +39,30 @@ processors:
 
   # Add attributes for routing and identification
   transform:
+    error_mode: ignore
     log_statements:
       - context: log
         statements:
           - set(attributes["log.level"], severity_text)
-          # First, try to extract event.domain from the log body (for Fluent Bit logs)
-          # The body is a map with fields like "event.domain", "log", "container_name", etc.
-          - set(attributes["event.domain"], body["event.domain"]) where attributes["event.domain"] == nil and body["event.domain"] != nil
+
+          # For Fluent Bit logs: body is a JSON string, parse it first
+          # Use cache to store parsed JSON body
+          - set(cache["parsed_body"], ParseJSON(body)) where IsString(body)
+
+          # Extract event.domain from parsed body (Fluent Bit JSON string case)
+          - set(attributes["event.domain"], cache["parsed_body"]["event.domain"]) where cache["parsed_body"] != nil and cache["parsed_body"]["event.domain"] != nil
+
           # Then try resource attributes (for SDK-instrumented apps)
           - set(attributes["event.domain"], resource.attributes["event.domain"]) where attributes["event.domain"] == nil and resource.attributes["event.domain"] != nil
-          # Also extract the log message from body for Fluent Bit logs
-          - set(attributes["message"], body["log"]) where body["log"] != nil
-          - set(attributes["container_name"], body["container_name"]) where body["container_name"] != nil
-          - set(attributes["service.namespace"], body["service.namespace"]) where body["service.namespace"] != nil
-          - set(attributes["deployment.environment"], body["deployment.environment"]) where body["deployment.environment"] != nil
-          # Fallback to default
+
+          # Extract other useful fields from parsed body
+          - set(attributes["message"], cache["parsed_body"]["log"]) where cache["parsed_body"] != nil and cache["parsed_body"]["log"] != nil
+          - set(attributes["container_name"], cache["parsed_body"]["container_name"]) where cache["parsed_body"] != nil and cache["parsed_body"]["container_name"] != nil
+          - set(attributes["service.namespace"], cache["parsed_body"]["service.namespace"]) where cache["parsed_body"] != nil and cache["parsed_body"]["service.namespace"] != nil
+          - set(attributes["deployment.environment"], cache["parsed_body"]["deployment.environment"]) where cache["parsed_body"] != nil and cache["parsed_body"]["deployment.environment"] != nil
+          - set(attributes["app"], cache["parsed_body"]["app"]) where cache["parsed_body"] != nil and cache["parsed_body"]["app"] != nil
+
+          # Fallback to default if event.domain still not set
           - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
 
           # Tag Azure sources based on scoping (receivers will tag via resource processors if possible, but here we can't easily distinguish receiver in transform unless we use separate pipelines with resource processors)
