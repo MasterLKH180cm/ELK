@@ -41,40 +41,27 @@ processors:
   transform:
     error_mode: ignore
     log_statements:
+      - context: resource
+        statements:
+          # Move resource attributes to log attributes for easier access
+          - set(attributes["event.domain"], attributes["event.domain"]) where attributes["event.domain"] != nil
+          - set(attributes["service.namespace"], attributes["service.namespace"]) where attributes["service.namespace"] != nil
+          - set(attributes["deployment.environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil
+          - set(attributes["app"], attributes["app"]) where attributes["app"] != nil
+          - set(attributes["container_name"], attributes["container_name"]) where attributes["container_name"] != nil
+          - set(attributes["container_id"], attributes["container_id"]) where attributes["container_id"] != nil
+          
       - context: log
         statements:
           - set(attributes["log.level"], severity_text)
-
-          # Priority 1: Check if event.domain already exists in log attributes (from Fluent Bit or SDK)
-          # Do nothing if it already exists - this preserves the original value
-
-          # Priority 2: Extract from resource attributes (for SDK-instrumented apps)
-          - set(attributes["event.domain"], resource.attributes["event.domain"]) where attributes["event.domain"] == nil and resource.attributes["event.domain"] != nil
-
-          # Priority 3: Body is a JSON string (parse it first)
-          # Use cache to store parsed JSON body
-          - set(cache["parsed_body"], ParseJSON(body)) where IsString(body) and attributes["event.domain"] == nil
-
-          # Priority 4: Body is already a map (Fluent Bit OTLP direct)
-          # Extract event.domain directly from body map
+          
+          # Extract from body if it's a map
           - set(attributes["event.domain"], body["event.domain"]) where attributes["event.domain"] == nil and IsMap(body) and body["event.domain"] != nil
-
-          # Priority 5: Extract event.domain from parsed JSON body (string case)
-          - set(attributes["event.domain"], cache["parsed_body"]["event.domain"]) where attributes["event.domain"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["event.domain"] != nil
-
-          # Extract other useful fields from body map (Case 2)
-          - set(attributes["message"], body["log"]) where IsMap(body) and body["log"] != nil
-          - set(attributes["container_name"], body["container_name"]) where IsMap(body) and body["container_name"] != nil
-          - set(attributes["service.namespace"], body["service.namespace"]) where IsMap(body) and body["service.namespace"] != nil
-          - set(attributes["deployment.environment"], body["deployment.environment"]) where IsMap(body) and body["deployment.environment"] != nil
-          - set(attributes["app"], body["app"]) where IsMap(body) and body["app"] != nil
-
-          # Extract other useful fields from parsed JSON body (Case 1)
-          - set(attributes["message"], cache["parsed_body"]["log"]) where attributes["message"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["log"] != nil
-          - set(attributes["container_name"], cache["parsed_body"]["container_name"]) where attributes["container_name"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["container_name"] != nil
-          - set(attributes["service.namespace"], cache["parsed_body"]["service.namespace"]) where attributes["service.namespace"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["service.namespace"] != nil
-          - set(attributes["deployment.environment"], cache["parsed_body"]["deployment.environment"]) where attributes["deployment.environment"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["deployment.environment"] != nil
-          - set(attributes["app"], cache["parsed_body"]["app"]) where attributes["app"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["app"] != nil
+          - set(attributes["message"], body["log"]) where attributes["message"] == nil and IsMap(body) and body["log"] != nil
+          - set(attributes["container_name"], body["container_name"]) where attributes["container_name"] == nil and IsMap(body) and body["container_name"] != nil
+          - set(attributes["service.namespace"], body["service.namespace"]) where attributes["service.namespace"] == nil and IsMap(body) and body["service.namespace"] != nil
+          - set(attributes["deployment.environment"], body["deployment.environment"]) where attributes["deployment.environment"] == nil and IsMap(body) and body["deployment.environment"] != nil
+          - set(attributes["app"], body["app"]) where attributes["app"] == nil and IsMap(body) and body["app"] != nil
 
           # Fallback to default if event.domain still not set
           - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
