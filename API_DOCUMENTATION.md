@@ -69,16 +69,14 @@ OTLP Collector
     │  └─ batch (256 items, 2s timeout)
     │
     ├─ Domain-Based Filtering (per pipeline):
-    │  ├─ filter/auth: event.domain == "auth" → kafka/logs-auth
-    │  ├─ filter/session: event.domain == "session" → kafka/logs-session
+    │  ├─ filter/auth-session: event.domain == "auth-session" → kafka/logs-auth-session
     │  ├─ filter/worklist: event.domain == "worklist" → kafka/logs-worklist
     │  ├─ filter/viewer: event.domain == "viewer" → kafka/logs-viewer
     │  ├─ filter/dictation_*: event.domain == "dictation_*" → kafka/logs-dictation_*
     │  └─ filter/default: all others → kafka/logs-default
     │
     ├─ Exporters (domain-specific topics):
-    │  ├─ kafka/logs-auth → otel-logs-auth
-    │  ├─ kafka/logs-session → otel-logs-session
+    │  ├─ kafka/logs-auth-session → otel-logs-auth-session
     │  ├─ kafka/logs-worklist → otel-logs-worklist
     │  ├─ kafka/logs-viewer → otel-logs-viewer
     │  ├─ kafka/logs-dictation_backend → otel-logs-dictation_backend
@@ -92,8 +90,7 @@ OTLP Collector
 
     ↓
 Kafka Broker (localhost:29092)
-    ├─ Topic: otel-logs-auth (for auth domain logs)
-    ├─ Topic: otel-logs-session (for session domain logs)
+    ├─ Topic: otel-logs-auth-session (for auth and session domain logs)
     ├─ Topic: otel-logs-worklist (for worklist domain logs)
     ├─ Topic: otel-logs-viewer (for viewer domain logs)
     ├─ Topic: otel-logs-dictation_backend
@@ -110,8 +107,7 @@ Logstash Consumer
 
     ↓
 Elasticsearch (localhost:9200)
-    ├─ Data Stream: logs-auth-default
-    ├─ Data Stream: logs-session-default
+    ├─ Data Stream: logs-auth-session-default
     ├─ Data Stream: logs-worklist-default
     ├─ Data Stream: logs-viewer-default
     ├─ Data Stream: logs-dictation_backend-default
@@ -121,8 +117,7 @@ Elasticsearch (localhost:9200)
 
     ↓
 Kibana (localhost:5601)
-    ├─ Data View: "Auth Logs" (logs-auth-*)
-    ├─ Data View: "Session Logs" (logs-session-*)
+    ├─ Data View: "Auth-Session Logs" (logs-auth-session-*)
     ├─ Data View: "Worklist Logs" (logs-worklist-*)
     ├─ Data View: "Viewer Logs" (logs-viewer-*)
     ├─ Data View: "All Logs" (logs-*)
@@ -210,7 +205,7 @@ Submit a log message with comprehensive OpenTelemetry instrumentation, automatic
 | `X-Log-Level` | string | `DEBUG`, `INFO`, `WARN`, `ERROR`, `CRITICAL`, `FATAL`, `TRACE` | `INFO` | Severity level of the log |
 | `X-Event-Type` | string | `access`, `error`, `audit`, `validation`, `performance`, `security` | `access` | Type of event being logged |
 | `X-Event-Category` | string | `frontend`, `authentication`, `database`, `backend`, `security`, `infrastructure` | `backend` | Technical category of the event |
-| `X-Event-Domain` | string | `auth`, `session`, `dictation_frontend`, `dictation_backend`, `worklist`, `viewer`, `ohif`, `trace`, `metrics`, `default` | `default` | Business or technical domain (determines Kafka topic & data stream routing) |
+| `X-Event-Domain` | string | `auth-session`, `dictation_frontend`, `dictation_backend`, `worklist`, `viewer`, `ohif`, `trace`, `metrics`, `default` | `default` | Business or technical domain (determines Kafka topic & data stream routing) |
 | `Content-Type` | string | `application/json` | Optional | HTTP content type hint |
 
 #### Request Examples
@@ -228,27 +223,16 @@ curl "http://localhost:8000/api/logs?message=User%20authentication%20successful"
 ##### Domain-Specific Examples (PowerShell)
 
 ```powershell
-# Auth Domain - Authentication and authorization logs
+# Auth-Session Domain - Authentication, authorization and session logs
 curl.exe -X GET "http://localhost:8000/api/logs?message=User%20login%20successful" `
-  -H "X-Service-Name: auth-api" `
+  -H "X-Service-Name: auth-session-api" `
   -H "X-Service-Version: 1.2.0" `
   -H "X-Environment: prod" `
   -H "X-Log-Level: INFO" `
   -H "X-Event-Type: audit" `
   -H "X-Event-Category: authentication" `
-  -H "X-Event-Domain: auth"
-# → Routes to: otel-logs-auth → logs-auth-default
-
-# Session Domain - User session management
-curl.exe -X GET "http://localhost:8000/api/logs?message=Session%20created" `
-  -H "X-Service-Name: session-service" `
-  -H "X-Service-Version: 2.0.0" `
-  -H "X-Environment: prod" `
-  -H "X-Log-Level: INFO" `
-  -H "X-Event-Type: access" `
-  -H "X-Event-Category: backend" `
-  -H "X-Event-Domain: session"
-# → Routes to: otel-logs-session → logs-session-default
+  -H "X-Event-Domain: auth-session"
+# → Routes to: otel-logs-auth-session → logs-auth-session-default
 
 # Worklist Domain - Task and worklist operations
 curl.exe -X GET "http://localhost:8000/api/logs?message=Worklist%20query%20executed" `
@@ -326,16 +310,15 @@ Start-Sleep -Seconds 4
 # Check specific domain in Kafka
 docker exec kafka kafka-console-consumer.sh `
   --bootstrap-server localhost:9092 `
-  --topic otel-logs-auth `
+  --topic otel-logs-auth-session `
   --max-messages 1 `
   --from-beginning
 
 # Check specific domain in Elasticsearch
-curl.exe -s "http://localhost:9200/logs-auth-default/_search?size=1&sort=@timestamp:desc" | ConvertFrom-Json | Select-Object -ExpandProperty hits | Select-Object -ExpandProperty hits | Select-Object -ExpandProperty _source | Select-Object message, "event.domain", "@timestamp"
+curl.exe -s "http://localhost:9200/logs-auth-session-default/_search?size=1&sort=@timestamp:desc" | ConvertFrom-Json | Select-Object -ExpandProperty hits | Select-Object -ExpandProperty hits | Select-Object -ExpandProperty _source | Select-Object message, "event.domain", "@timestamp"
 
 # Count logs per domain
-curl.exe -s "http://localhost:9200/logs-auth-default/_count" | ConvertFrom-Json | Select-Object count
-curl.exe -s "http://localhost:9200/logs-session-default/_count" | ConvertFrom-Json | Select-Object count
+curl.exe -s "http://localhost:9200/logs-auth-session-default/_count" | ConvertFrom-Json | Select-Object count
 curl.exe -s "http://localhost:9200/logs-worklist-default/_count" | ConvertFrom-Json | Select-Object count
 curl.exe -s "http://localhost:9200/logs-viewer-default/_count" | ConvertFrom-Json | Select-Object count
 ```
@@ -343,13 +326,13 @@ curl.exe -s "http://localhost:9200/logs-viewer-default/_count" | ConvertFrom-Jso
 ##### With PowerShell (Alternative Syntax)
 ```powershell
 $headers = @{
-    "X-Service-Name" = "auth-api"
+    "X-Service-Name" = "auth-session-api"
     "X-Service-Version" = "1.0.0"
     "X-Environment" = "prod"
     "X-Log-Level" = "INFO"
     "X-Event-Type" = "access"
     "X-Event-Category" = "authentication"
-    "X-Event-Domain" = "auth"
+    "X-Event-Domain" = "auth-session"
 }
 
 $response = Invoke-WebRequest `
@@ -365,13 +348,13 @@ $response.Content | ConvertFrom-Json
 import requests
 
 headers = {
-    "X-Service-Name": "auth-api",
+    "X-Service-Name": "auth-session-api",
     "X-Service-Version": "1.0.0",
     "X-Environment": "prod",
     "X-Log-Level": "INFO",
     "X-Event-Type": "access",
     "X-Event-Category": "authentication",
-    "X-Event-Domain": "auth"
+    "X-Event-Domain": "auth-session"
 }
 
 response = requests.get(
@@ -387,7 +370,7 @@ print(response.json())
 
 ```powershell
 # Test all domains sequentially
-@("auth", "session", "worklist", "viewer", "dictation_backend", "dictation_frontend", "ohif", "default") | ForEach-Object {
+@("auth-session", "worklist", "viewer", "dictation_backend", "dictation_frontend", "ohif", "default") | ForEach-Object {
     $domain = $_
     Write-Host "Testing domain: $domain"
     curl.exe -X GET "http://localhost:8000/api/logs?message=Test-$domain-log" `
@@ -399,7 +382,7 @@ print(response.json())
 Start-Sleep -Seconds 5
 
 # Verify all domains in Elasticsearch
-@("auth", "session", "worklist", "viewer", "dictation_backend", "dictation_frontend", "ohif", "default") | ForEach-Object {
+@("auth-session", "worklist", "viewer", "dictation_backend", "dictation_frontend", "ohif", "default") | ForEach-Object {
     $count = (curl.exe -s "http://localhost:9200/logs-$_-default/_count" | ConvertFrom-Json).count
     Write-Host "logs-$_-default: $count logs"
 }
@@ -415,7 +398,7 @@ echo "Correlation ID: $CORR_ID"
 curl -s "http://localhost:8000/api/logs?message=test" | jq '.'
 
 # Test all domains (Bash)
-for domain in auth session worklist viewer dictation_backend dictation_frontend ohif default; do
+for domain in auth-session worklist viewer dictation_backend dictation_frontend ohif default; do
   echo "Testing domain: $domain"
   curl -s "http://localhost:8000/api/logs?message=Test-$domain-log" \
     -H "X-Service-Name: test-service" \
@@ -424,7 +407,7 @@ for domain in auth session worklist viewer dictation_backend dictation_frontend 
 done
 
 # Verify domain routing
-for domain in auth session worklist viewer dictation_backend dictation_frontend ohif default; do
+for domain in auth-session worklist viewer dictation_backend dictation_frontend ohif default; do
   count=$(curl -s "http://localhost:9200/logs-$domain-default/_count" | jq '.count')
   echo "logs-$domain-default: $count logs"
 done
@@ -470,7 +453,7 @@ done
   "log.level": "INFO",
   "event.type": "access",
   "event.category": "authentication",
-  "event.domain": "auth"
+  "event.domain": "auth-session"
 }
 ```
 
@@ -486,7 +469,7 @@ done
 - `service.name` - Must not be empty
 - `deployment.environment` - Must be one of: `dev`, `staging`, `prod`, `test`
 - `log.level` - Must be one of: `DEBUG`, `INFO`, `WARN`, `ERROR`, `FATAL`, `TRACE`
-- `event.domain` - Determines routing. Valid values: `auth`, `session`, `dictation_frontend`, `dictation_backend`, `worklist`, `viewer`, `ohif`, `trace`, `metrics`, `default`
+- `event.domain` - Determines routing. Valid values: `auth-session`, `dictation_frontend`, `dictation_backend`, `worklist`, `viewer`, `ohif`, `trace`, `metrics`, `default`
 - `event.type` - Must be one of: `access`, `error`, `audit`, `validation`, `performance`, `security`
 
 **Forbidden Keywords** (automatically redacted for PII protection):
@@ -525,7 +508,7 @@ If detected, PII is automatically masked with `[REDACTED_*]` patterns.
   "correlation_id": "550e8400-e29b-41d4-a716-446655440000",
   "request_message": "User authentication successful",
   "message_length": 31,
-  "event.domain": "auth",
+  "event.domain": "auth-session",
   "event.type": "access",
   "event.category": "authentication"
 }
@@ -725,16 +708,16 @@ docker exec kafka kafka-topics.sh \
   --bootstrap-server localhost:9092 \
   --list
 
-# View auth logs (last 5)
+# View auth-session logs (last 5)
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic otel-logs-auth \
+  --topic otel-logs-auth-session \
   --max-messages 5
 
-# Monitor real-time auth logs
+# Monitor real-time auth-session logs
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic otel-logs-auth \
+  --topic otel-logs-auth-session \
   --from-beginning
 
 # View all log topics
@@ -778,8 +761,8 @@ curl http://localhost:9200/_cat/indices?v
 # Count all logs
 curl http://localhost:9200/logs-*/_count | jq '.count'
 
-# Count auth logs specifically
-curl http://localhost:9200/logs-auth-default/_count | jq '.count'
+# Count auth-session logs specifically
+curl http://localhost:9200/logs-auth-session-default/_count | jq '.count'
 
 # Count logs from last hour
 curl -X POST http://localhost:9200/logs-*/_search \
@@ -841,8 +824,8 @@ curl -X POST http://localhost:9200/logs-*/_search \
     "size": 20
   }' | jq '.hits.hits[] | {time: ._source["@timestamp"], msg: ._source.message, domain: ._source["event.domain"]}'
 
-# Search auth-specific ERROR logs
-curl -X POST http://localhost:9200/logs-auth-default/_search \
+# Search auth-session-specific ERROR logs
+curl -X POST http://localhost:9200/logs-auth-session-default/_search \
   -H 'Content-Type: application/json' \
   -d '{
     "query": { "match": { "log.level": "ERROR" } },
@@ -873,16 +856,15 @@ curl -X POST http://localhost:9200/logs-*/_search \
    - Navigate: **Stack Management** → **Data Views**
    - Click: **Create data view**
    - Create multiple data views for different domains:
-     - Name: `Auth Logs`, Pattern: `logs-auth-*`, Time field: `@timestamp`
-     - Name: `Session Logs`, Pattern: `logs-session-*`, Time field: `@timestamp`
+     - Name: `Auth-Session Logs`, Pattern: `logs-auth-session-*`, Time field: `@timestamp`
      - Name: `All Logs`, Pattern: `logs-*`, Time field: `@timestamp`
    - Click: **Save data view to Kibana**
 
 3. **Browse Logs**
    - Navigate: **Discover**
-   - Select: `Auth Logs` or `All Logs` data view
+   - Select: `Auth-Session Logs` or `All Logs` data view
    - View log entries filtered by domain
-   - Use KQL queries: `event.domain: "auth"` or `service.name: "auth-api"`
+   - Use KQL queries: `event.domain: "auth-session"` or `service.name: "auth-session-api"`
 
 4. **Create Visualization**
    - Navigate: **Visualize Library** → **Create new visualization**
@@ -1021,10 +1003,10 @@ echo "Open: http://localhost:5601"
 
 3. **Check Kafka messages:**
    ```bash
-   # Check auth domain logs
+   # Check auth-session domain logs
    docker exec kafka kafka-console-consumer.sh \
      --bootstrap-server localhost:9092 \
-     --topic otel-logs-auth \
+     --topic otel-logs-auth-session \
      --max-messages 3 \
      --from-beginning
    
@@ -1067,10 +1049,10 @@ docker-compose logs fastapi_app | grep "$CORR_ID"
 # 3. Check OTLP Collector logs
 docker-compose logs otel-collector | grep "$CORR_ID"
 
-# 4. Check Kafka message (try auth topic first, then default)
+# 4. Check Kafka message (try auth-session topic first, then default)
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \
-  --topic otel-logs-auth \
+  --topic otel-logs-auth-session \
   --max-messages 10 | grep "$CORR_ID" || \
 docker exec kafka kafka-console-consumer.sh \
   --bootstrap-server localhost:9092 \

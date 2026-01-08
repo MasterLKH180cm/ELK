@@ -269,7 +269,7 @@ create_ilm_policy "logs-retention-7-30" 7 30
 echo ""
 
 # 建立索引模板
-create_index_template "logs-auth" "logs-auth-*" "logs-retention-30-90"
+create_index_template "logs-auth-session" "logs-auth-session-*" "logs-retention-30-90"
 create_index_template "logs-frontend" "logs-frontend-*" "logs-retention-7-30"
 create_index_template "logs-backend" "logs-backend-*" "logs-retention-30-90"
 create_index_template "logs-ohif" "logs-ohif-*" "logs-retention-30-90"
@@ -277,7 +277,7 @@ create_index_template "logs-dictation_backend" "logs-dictation_backend-*" "logs-
 create_index_template "logs-dictation_frontend" "logs-dictation_frontend-*" "logs-retention-7-30"
 create_index_template "logs-trace" "logs-trace-*" "logs-retention-30-90"
 create_index_template "logs-metrics" "logs-metrics-*" "logs-retention-7-30"
-create_index_template "logs-session" "logs-session-*" "logs-retention-30-90"
+# logs-session merged into logs-auth-session
 create_index_template "logs-worklist" "logs-worklist-*" "logs-retention-30-90"
 create_index_template "logs-viewer" "logs-viewer-*" "logs-retention-30-90"
 create_index_template "logs-default" "logs-default-*" "logs-retention-30-90"

@@ -1,12 +1,12 @@
 {
   "index_templates": [
     {
-      "name": "logs-auth",
-      "description": "Authentication and authorization logs",
-      "index_pattern": "logs-auth-*",
+      "name": "logs-auth-session",
+      "description": "Authentication, authorization, and session logs",
+      "index_pattern": "logs-auth-session-*",
       "ilm_policy": "logs-retention-30-90",
       "priority": 200,
-      "data_stream": "logs-auth-default"
+      "data_stream": "logs-auth-session-default"
     },
     {
       "name": "logs-frontend",
@@ -63,14 +63,6 @@
       "ilm_policy": "logs-retention-7-30",
       "priority": 200,
       "data_stream": "logs-metrics-default"
-    },
-    {
-      "name": "logs-session",
-      "description": "User session logs",
-      "index_pattern": "logs-session-*",
-      "ilm_policy": "logs-retention-30-90",
-      "priority": 200,
-      "data_stream": "logs-session-default"
     },
     {
       "name": "logs-worklist",

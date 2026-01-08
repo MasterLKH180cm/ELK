@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Kibana Data View Initialization Script
-# Creates data views for auth, frontend, backend, and default log types
+# Creates data views for auth-session, frontend, backend, and default log types
 
 set -e
 
@@ -99,7 +99,7 @@ create_data_view() {
 # Create data views for the log types
 # These match the data streams: logs-{dataset}-default
 # Dataset comes from 'event_domain' extracted in Logstash 
-create_data_view "Auth Logs" "logs-auth-*" "@timestamp"
+create_data_view "Auth-Session Logs" "logs-auth-session-*" "@timestamp"
 create_data_view "Frontend Logs" "logs-frontend-*" "@timestamp"
 create_data_view "Backend Logs" "logs-backend-*" "@timestamp"
 create_data_view "Default Logs" "logs-default-*" "@timestamp"
@@ -108,7 +108,7 @@ create_data_view "Dictation Backend Logs" "logs-dictation_backend-*" "@timestamp
 create_data_view "Dictation Frontend Logs" "logs-dictation_frontend-*" "@timestamp"
 create_data_view "Trace Logs" "logs-trace-*" "@timestamp"
 create_data_view "Metrics Logs" "logs-metrics-*" "@timestamp"
-create_data_view "Session Logs" "logs-session-*" "@timestamp"
+# Session Logs merged into Auth-Session Logs
 create_data_view "Worklist Logs" "logs-worklist-*" "@timestamp"
 create_data_view "Viewer Logs" "logs-viewer-*" "@timestamp"
 create_data_view "All Logs" "logs-*" "@timestamp"

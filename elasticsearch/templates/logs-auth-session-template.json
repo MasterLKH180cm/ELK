@@ -1,5 +1,7 @@
 {
-  "index_patterns": ["logs-auth-*"],
+  "index_patterns": [
+    "logs-auth-session-*"
+  ],
   "template": {
     "settings": {
       "number_of_shards": 1,

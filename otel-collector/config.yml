@@ -84,17 +84,11 @@ processors:
         action: upsert
 
   # Filter processors with strict matching using OTTL
-  filter/auth:
+  filter/auth-session:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] == "auth"'
-
-  filter/session:
-    error_mode: ignore
-    logs:
-      log_record:
-        - 'attributes["event.domain"] == "session"'
+        - 'attributes["event.domain"] == "auth-session"'
 
   filter/worklist:
     error_mode: ignore
@@ -125,7 +119,7 @@ processors:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] != "auth" and attributes["event.domain"] != "session" and attributes["event.domain"] != "worklist" and attributes["event.domain"] != "viewer" and attributes["event.domain"] != "trace" and attributes["event.domain"] != "metrics"'
+        - 'attributes["event.domain"] != "auth-session" and attributes["event.domain"] != "worklist" and attributes["event.domain"] != "viewer" and attributes["event.domain"] != "trace" and attributes["event.domain"] != "metrics"'
 
 exporters:
   debug:
@@ -180,18 +174,11 @@ exporters:
     topic: otel-logs-default
     encoding: otlp_json
 
-  kafka/logs-auth:
+  kafka/logs-auth-session:
     brokers: ["kafka:29092"]
     protocol_version: "2.6.0"
-    client_id: "otel-collector-logs-auth"
-    topic: otel-logs-auth
-    encoding: otlp_json
-
-  kafka/logs-session:
-    brokers: ["kafka:29092"]
-    protocol_version: "2.6.0"
-    client_id: "otel-collector-logs-session"
-    topic: otel-logs-session
+    client_id: "otel-collector-logs-auth-session"
+    topic: otel-logs-auth-session
     encoding: otlp_json
 
   kafka/logs-worklist:
@@ -241,17 +228,17 @@ service:
       exporters: [kafka/logs-dictation_frontend]
 
     # Pipelines for Specific Domains (Filtered from OTLP)
-    logs/auth:
+    logs/auth-session:
       receivers: [otlp]
       processors:
-        [memory_limiter, resourcedetection, transform, filter/auth, batch]
-      exporters: [kafka/logs-auth]
-
-    logs/session:
-      receivers: [otlp]
-      processors:
-        [memory_limiter, resourcedetection, transform, filter/session, batch]
-      exporters: [kafka/logs-session]
+        [
+          memory_limiter,
+          resourcedetection,
+          transform,
+          filter/auth-session,
+          batch,
+        ]
+      exporters: [kafka/logs-auth-session]
 
     logs/worklist:
       receivers: [otlp]

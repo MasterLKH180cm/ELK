@@ -7,10 +7,10 @@
       "description": "All logs across all services"
     },
     {
-      "name": "Auth Logs",
-      "index_pattern": "logs-auth-*",
+      "name": "Auth-Session Logs",
+      "index_pattern": "logs-auth-session-*",
       "time_field": "@timestamp",
-      "description": "Authentication and authorization logs"
+      "description": "Authentication, authorization, and session logs"
     },
     {
       "name": "Frontend Logs",
@@ -53,12 +53,6 @@
       "index_pattern": "logs-metrics-*",
       "time_field": "@timestamp",
       "description": "Application metrics logs"
-    },
-    {
-      "name": "Session Logs",
-      "index_pattern": "logs-session-*",
-      "time_field": "@timestamp",
-      "description": "User session logs"
     },
     {
       "name": "Worklist Logs",

@@ -27,8 +27,7 @@ class LogLevel(str, Enum):
 class EventDomain(str, Enum):
     """允許的業務或技術領域"""
 
-    AUTH = "auth"
-    SESSION = "session"
+    AUTH_SESSION = "auth-session"
     DICTATION_FRONTEND = "dictation_frontend"
     DICTATION_BACKEND = "dictation_backend"
     WORKLIST = "worklist"
@@ -202,8 +201,7 @@ class LogAttributesEnricher:
     def _infer_namespace(service_name: str) -> str:
         """根據 service.name 推斷 namespace"""
         mapping = {
-            "auth": "identity",
-            "session": "identity",
+            "auth-session": "identity",
             "dictation_frontend": "frontend",
             "dictation_backend": "backend",
             "worklist": "frontend",
@@ -220,8 +218,7 @@ class LogAttributesEnricher:
     def _infer_category(event_domain: str) -> str:
         """根據 event.domain 推斷 event.category"""
         mapping = {
-            "auth": "authentication",
-            "session": "backend",
+            "auth-session": "authentication",
             "dictation_frontend": "frontend",
             "dictation_backend": "backend",
             "worklist": "frontend",
@@ -265,10 +262,10 @@ def validate_and_enrich_log_record(
 if __name__ == "__main__":
     # 測試
     test_attrs = {
-        "service.name": "auth-api",
+        "service.name": "auth-session-api",
         "deployment.environment": "prod",
         "log.level": "INFO",
-        "event.domain": "auth",
+        "event.domain": "auth-session",
         "event.type": "access",
     }
 

@@ -10,7 +10,7 @@ SERVICE_VERSION="1.0.0"
 # Valid values from log_attributes_validator.py and API implementation
 ENVIRONMENTS=("dev" "staging" "prod" "test")
 LOG_LEVELS=("DEBUG" "INFO" "WARN" "ERROR" "CRITICAL" "FATAL" "TRACE")
-EVENT_DOMAINS=("auth" "session" "dictation_frontend" "dictation_backend" "worklist" "viewer" "ohif" "trace" "metrics" "default")
+EVENT_DOMAINS=("auth-session" "dictation_frontend" "dictation_backend" "worklist" "viewer" "ohif" "trace" "metrics" "default")
 EVENT_TYPES=("access" "error" "audit" "validation" "performance" "security")
 EVENT_CATEGORIES=("frontend" "authentication" "database" "backend" "security" "infrastructure")
 
