@@ -100,8 +100,8 @@ create_data_view() {
 # These match the data streams: logs-{dataset}-default
 # Dataset comes from 'event_domain' extracted in Logstash 
 create_data_view "Auth-Session Logs" "logs-auth-session-*" "@timestamp"
-create_data_view "Frontend Logs" "logs-frontend-*" "@timestamp"
-create_data_view "Backend Logs" "logs-backend-*" "@timestamp"
+# create_data_view "Frontend Logs" "logs-frontend-*" "@timestamp"
+# create_data_view "Backend Logs" "logs-backend-*" "@timestamp"
 create_data_view "Default Logs" "logs-default-*" "@timestamp"
 create_data_view "OHIF Logs" "logs-ohif-*" "@timestamp"
 create_data_view "Dictation Backend Logs" "logs-dictation_backend-*" "@timestamp"

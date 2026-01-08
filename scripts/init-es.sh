@@ -270,8 +270,8 @@ echo ""
 
 # 建立索引模板
 create_index_template "logs-auth-session" "logs-auth-session-*" "logs-retention-30-90"
-create_index_template "logs-frontend" "logs-frontend-*" "logs-retention-7-30"
-create_index_template "logs-backend" "logs-backend-*" "logs-retention-30-90"
+# create_index_template "logs-frontend" "logs-frontend-*" "logs-retention-7-30"
+# create_index_template "logs-backend" "logs-backend-*" "logs-retention-30-90"
 create_index_template "logs-ohif" "logs-ohif-*" "logs-retention-30-90"
 create_index_template "logs-dictation_backend" "logs-dictation_backend-*" "logs-retention-30-90"
 create_index_template "logs-dictation_frontend" "logs-dictation_frontend-*" "logs-retention-7-30"
