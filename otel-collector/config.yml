@@ -45,19 +45,22 @@ processors:
         statements:
           - set(attributes["log.level"], severity_text)
 
-          # Case 1: Body is a JSON string (parse it first)
-          # Use cache to store parsed JSON body
-          - set(cache["parsed_body"], ParseJSON(body)) where IsString(body)
+          # Priority 1: Check if event.domain already exists in log attributes (from Fluent Bit or SDK)
+          # Do nothing if it already exists - this preserves the original value
 
-          # Case 2: Body is already a map (Fluent Bit OTLP direct)
-          # Extract event.domain directly from body map
-          - set(attributes["event.domain"], body["event.domain"]) where IsMap(body) and body["event.domain"] != nil
-
-          # Extract event.domain from parsed JSON body (string case)
-          - set(attributes["event.domain"], cache["parsed_body"]["event.domain"]) where attributes["event.domain"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["event.domain"] != nil
-
-          # Then try resource attributes (for SDK-instrumented apps)
+          # Priority 2: Extract from resource attributes (for SDK-instrumented apps)
           - set(attributes["event.domain"], resource.attributes["event.domain"]) where attributes["event.domain"] == nil and resource.attributes["event.domain"] != nil
+
+          # Priority 3: Body is a JSON string (parse it first)
+          # Use cache to store parsed JSON body
+          - set(cache["parsed_body"], ParseJSON(body)) where IsString(body) and attributes["event.domain"] == nil
+
+          # Priority 4: Body is already a map (Fluent Bit OTLP direct)
+          # Extract event.domain directly from body map
+          - set(attributes["event.domain"], body["event.domain"]) where attributes["event.domain"] == nil and IsMap(body) and body["event.domain"] != nil
+
+          # Priority 5: Extract event.domain from parsed JSON body (string case)
+          - set(attributes["event.domain"], cache["parsed_body"]["event.domain"]) where attributes["event.domain"] == nil and cache["parsed_body"] != nil and cache["parsed_body"]["event.domain"] != nil
 
           # Extract other useful fields from body map (Case 2)
           - set(attributes["message"], body["log"]) where IsMap(body) and body["log"] != nil
