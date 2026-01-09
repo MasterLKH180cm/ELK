@@ -3,7 +3,7 @@
 # Comprehensive test script for ALL log attribute combinations
 # Tests all combinations: environment × log_level × event_domain × event_type × event_category
 
-BASE_URL="http://localhost:8000/api/logs"
+BASE_URL="http://20.14.90.107:8000/api/logs"
 SERVICE_NAME="test-service"
 SERVICE_VERSION="1.0.0"
 
