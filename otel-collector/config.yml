@@ -44,7 +44,6 @@ processors:
       - context: log
         statements:
           # Copy resource attributes to log attributes
-            - log("Full log record: " + to_string(*))
             - set(attributes["event.domain"], resource.attributes["event.domain"]) where resource.attributes["event.domain"] != nil
             - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
             - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil
@@ -135,7 +134,9 @@ processors:
 
 exporters:
   debug:
-    verbosity: basic
+    verbosity: detailed
+    sampling_initial: 10
+    sampling_thereafter: 10
 
   kafka/traces:
     brokers:
@@ -256,13 +257,13 @@ service:
       receivers: [otlp]
       processors:
         [memory_limiter, resourcedetection, transform, filter/worklist, batch]
-      exporters: [kafka/logs-worklist]
+      exporters: [debug, kafka/logs-worklist]
 
     logs/viewer:
       receivers: [otlp]
       processors:
         [memory_limiter, resourcedetection, transform, filter/viewer, batch]
-      exporters: [kafka/logs-viewer]
+      exporters: [debug, kafka/logs-viewer]
 
     # Pipeline for Default/Fallback Logs
     logs/default:
