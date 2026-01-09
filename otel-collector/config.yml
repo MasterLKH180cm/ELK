@@ -43,25 +43,20 @@ processors:
     log_statements:
       - context: log
         statements:
-          # ------------------------------------------------------------------
-          # CRITICAL FIX: Handle the Map received from Fluent Bit
-          # ------------------------------------------------------------------
-          # 1. Merge the incoming Body (which is a Map) into Attributes
-          - merge_maps(attributes, body, "upsert") 
+          # 1. SAFER: Only try to merge if the body is actually a Map
+          - merge_maps(attributes, body, "upsert") where IsMap(body)
 
-          # 2. Now Attributes contains "event.domain", "service.namespace", etc.
-          #    Promote them to Resource Attributes (for routing)
+          # 2. Promote attributes (routing)
           - set(resource.attributes["event.domain"], attributes["event.domain"])
           - set(resource.attributes["service.namespace"], attributes["service.namespace"])
           - set(resource.attributes["app"], attributes["app"])
           - set(resource.attributes["deployment.environment"], attributes["deployment.environment"])
 
-          # 3. Clean up: Set the Body to just the actual log message string
+          # 3. Clean up: Set Body to log message (only if it exists)
           - set(body, attributes["log"]) where attributes["log"] != nil
           
-          # 4. Fallback (just in case)
+          # 4. Fallback
           - set(resource.attributes["event.domain"], "default") where resource.attributes["event.domain"] == nil
-
 
 # General attributes batching
   batch:
