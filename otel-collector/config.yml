@@ -249,7 +249,7 @@ service:
           filter/auth-session,
           batch,
         ]
-      exporters: [kafka/logs-auth-session]
+      exporters: [debug, kafka/logs-auth-session]
 
     logs/worklist:
       receivers: [otlp]
@@ -274,4 +274,4 @@ service:
           filter/default_exclude,
           batch,
         ]
-      exporters: [kafka/logs-default]
+      exporters: [debug, kafka/logs-default]
