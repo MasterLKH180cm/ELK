@@ -38,21 +38,26 @@ processors:
     override: false
 
   # Add attributes for routing and identification
-  # Fluent-bit outputs standard OTLP format with resource attributes already set
   transform:
     error_mode: ignore
     log_statements:
       - context: log
         statements:
-          # Copy resource attributes to log attributes for routing and filtering
-          # Resource attributes are in resource.attributes[], need to copy to log.attributes[]
+          # Copy resource attributes to log attributes for routing
+          # Fluent-bit sends resource attributes at resource level
           - set(attributes["event.domain"], resource.attributes["event.domain"]) where resource.attributes["event.domain"] != nil
           - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
           - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil
           - set(attributes["app"], resource.attributes["app"]) where resource.attributes["app"] != nil
           
-          # Set log level attribute from severity
+          # Set log level from severity
           - set(attributes["log.level"], severity_text) where severity_text != nil
+          
+          # Handle message field - Fluent-bit puts log content in body.stringValue
+          - set(attributes["message"], body.stringValue) where IsString(body.stringValue) and attributes["message"] == nil
+          
+          # Log attributes from Fluent-bit (container_id, container_name, source, log) 
+          # are already in attributes, no need to extract
           
           # Fallback to default if event.domain still not set
           - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
