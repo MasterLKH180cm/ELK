@@ -55,7 +55,7 @@ processors:
             # Fluent Bit body → message
             - set(attributes["message"], body) where body != nil and attributes["message"] == nil
             # Fallback domain
-            - set(attributes["event.domain"], "auth-session") where attributes["event.domain"] == nil
+            - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
 
   # General attributes batching
   batch:
