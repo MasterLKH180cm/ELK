@@ -43,21 +43,31 @@ processors:
     log_statements:
       - context: log
         statements:
-          # 1. Parse the incoming JSON body string into a map
-          - merge_maps(attributes, ParseJSON(body), "upsert") where IsMatch(body, "^\\{")
+          # ---------------------------------------------------------
+          # CHANGED: Handle Map Body (Standard OTLP from Fluent Bit)
+          # ---------------------------------------------------------
+          # Fluent Bit sends the record as a Map. We merge it directly into attributes.
+          # We do NOT use ParseJSON because it is not a string string.
+          - merge_maps(attributes, body, "upsert")
 
-          # 2. Now 'attributes' contains 'event.domain', 'service.namespace', etc.
-          #    We can extract them to Resource Attributes as you intended.
+          # ---------------------------------------------------------
+          # Logic to Promote Attributes to Resources (Same as before)
+          # ---------------------------------------------------------
           - set(resource.attributes["event.domain"], attributes["event.domain"])
           - set(resource.attributes["service.namespace"], attributes["service.namespace"])
           - set(resource.attributes["app"], attributes["app"])
+          - set(resource.attributes["deployment.environment"], attributes["deployment.environment"])
 
-          # 3. Clean up: Set the Body to the actual log message (extract from attributes)
+          # ---------------------------------------------------------
+          # Cleanup: Set Body to just the log message
+          # ---------------------------------------------------------
           - set(body, attributes["log"]) where attributes["log"] != nil
           
-          # 4. Fallback
+          # Fallback
           - set(resource.attributes["event.domain"], "default") where resource.attributes["event.domain"] == nil
-  # General attributes batching
+
+
+# General attributes batching
   batch:
     send_batch_size: 256
     timeout: 2s
