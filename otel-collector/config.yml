@@ -39,24 +39,25 @@ processors:
 
   # Add attributes for routing and identification
   transform:
-  error_mode: ignore
   log_statements:
-    - context: log
-      statements:
-        # Copy resource attributes to log attributes for routing
-        - set(attributes["event.domain"], resource.attributes["event.domain"]) where resource.attributes["event.domain"] != nil
-        - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
-        - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil
-        - set(attributes["app"], resource.attributes["app"]) where resource.attributes["app"] != nil
+    statements:
+      - context: log
+        error_mode: ignore
+        statements:
+          # Copy resource attributes to log attributes
+          - set(attributes["event.domain"], resource.attributes["event.domain"]) where resource.attributes["event.domain"] != nil
+          - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
+          - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil
+          - set(attributes["app"], resource.attributes["app"]) where resource.attributes["app"] != nil
 
-        # Set log level from severity
-        - set(attributes["log.level"], severity_text) where severity_text != nil
+          # Set log level from severity
+          - set(attributes["log.level"], severity_text) where severity_text != nil
 
-        # Handle message field (Fluent Bit → body.stringValue)
-        - set(attributes["message"], body.stringValue) where body.stringValue != nil and attributes["message"] == nil
+          # Fluent Bit message handling
+          - set(attributes["message"], body.stringValue) where body.stringValue != nil and attributes["message"] == nil
 
-        # Fallback domain
-        - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
+          # Fallback domain
+          - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
 
   # General attributes batching
   batch:
