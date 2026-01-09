@@ -53,8 +53,7 @@ processors:
             - set(attributes["log.level"], severity_text) where severity_text != nil
 
             # Fluent Bit body → message
-            - set(attributes["message"], ToString(body)) where body != nil and attributes["message"] == nil
-
+            - set(attributes["message"], body) where body != nil and attributes["message"] == nil
             # Fallback domain
             - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
 
