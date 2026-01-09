@@ -44,7 +44,6 @@ processors:
       - context: log
         statements:
           # Copy resource attributes to log attributes
-          - log("Incoming attributes: %{attributes}")
           - set(resource.attributes["event.domain"], attributes["event.domain"]) where attributes["event.domain"] != nil
           - set(resource.attributes["service.namespace"], attributes["service.namespace"]) where attributes["service.namespace"] != nil
           - set(resource.attributes["deployment.environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil
@@ -135,10 +134,10 @@ processors:
         - 'attributes["event.domain"] == "auth-session" or attributes["event.domain"] == "worklist" or attributes["event.domain"] == "viewer" or attributes["event.domain"] == "trace" or attributes["event.domain"] == "metrics"'
 
 exporters:
-  debug:
+  debug/raw:
     verbosity: detailed
-    sampling_initial: 100
-    sampling_thereafter: 100
+  debug/processed:
+    verbosity: detailed
 
   kafka/traces:
     brokers:
@@ -216,12 +215,12 @@ service:
     traces:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection, batch]
-      exporters: [debug, kafka/traces]
+      exporters: [debug/raw, kafka/traces]
 
     metrics:
       receivers: [otlp]
       processors: [memory_limiter, resourcedetection, batch]
-      exporters: [debug, kafka/metrics]
+      exporters: [debug/raw, kafka/metrics]
 
     # Pipeline for OHIF (EventHub)
     logs/ohif:
@@ -253,19 +252,19 @@ service:
           filter/auth-session,
           batch,
         ]
-      exporters: [debug, kafka/logs-auth-session]
+      exporters: [debug/raw, kafka/logs-auth-session, debug/processed]
 
     logs/worklist:
       receivers: [otlp]
       processors:
         [memory_limiter, resourcedetection, transform, filter/worklist, batch]
-      exporters: [kafka/logs-worklist]
+      exporters: [debug/raw, kafka/logs-worklist, debug/processed]
 
     logs/viewer:
       receivers: [otlp]
       processors:
         [memory_limiter, resourcedetection, transform, filter/viewer, batch]
-      exporters: [kafka/logs-viewer]
+      exporters: [debug/raw, kafka/logs-viewer, debug/processed]
 
     # Pipeline for Default/Fallback Logs
     logs/default:
@@ -278,4 +277,4 @@ service:
           filter/default_exclude,
           batch,
         ]
-      exporters: [debug, kafka/logs-default]
+      exporters: [debug/raw, kafka/logs-default, debug/processed]
