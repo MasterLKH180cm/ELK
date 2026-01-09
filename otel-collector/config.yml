@@ -278,10 +278,10 @@ service:
     logs/raw:
       receivers: [otlp]
       processors: []       # Skip processors here
-      exporters: [debug/raw]
+      exporters: [debug]
 
     # Pipeline 2: Processed Data (With Transform)
     logs/processed:
       receivers: [otlp]
       processors: [transform]
-      exporters: [debug/processed]
+      exporters: [debug]
