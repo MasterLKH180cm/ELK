@@ -43,16 +43,17 @@ processors:
     log_statements:
       - context: log
         statements:
-          # 1. SAFER: Only try to merge if the body is actually a Map
+          # 1. Merge the nested map into attributes
+          #    Body received: {"log": "INFO...", "event.domain": "auth-session", ...}
           - merge_maps(attributes, body, "upsert") where IsMap(body)
 
-          # 2. Promote attributes (routing)
+          # 2. Extract Routing Attributes
           - set(resource.attributes["event.domain"], attributes["event.domain"])
           - set(resource.attributes["service.namespace"], attributes["service.namespace"])
           - set(resource.attributes["app"], attributes["app"])
           - set(resource.attributes["deployment.environment"], attributes["deployment.environment"])
 
-          # 3. Clean up: Set Body to log message (only if it exists)
+          # 3. Restore the original log message
           - set(body, attributes["log"]) where attributes["log"] != nil
           
           # 4. Fallback
