@@ -44,6 +44,7 @@ processors:
       - context: log
         statements:
           # Copy resource attributes to log attributes
+          - log("Incoming attributes: %{attributes}")
           - set(resource.attributes["event.domain"], attributes["event.domain"]) where attributes["event.domain"] != nil
           - set(resource.attributes["service.namespace"], attributes["service.namespace"]) where attributes["service.namespace"] != nil
           - set(resource.attributes["deployment.environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil
