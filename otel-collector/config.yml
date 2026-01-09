@@ -44,18 +44,19 @@ processors:
       - context: log
         statements:
           # Copy resource attributes to log attributes
-            - set(attributes["event.domain"], resource.attributes["event.domain"]) where resource.attributes["event.domain"] != nil
-            - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
-            - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil
-            - set(attributes["app"], resource.attributes["app"]) where resource.attributes["app"] != nil
+          - set(resource.attributes["event.domain"], attributes["event.domain"]) where attributes["event.domain"] != nil
+          - set(resource.attributes["service.namespace"], attributes["service.namespace"]) where attributes["service.namespace"] != nil
+          - set(resource.attributes["deployment.environment"], attributes["deployment.environment"]) where attributes["deployment.environment"] != nil
+          - set(resource.attributes["app"], attributes["app"]) where attributes["app"] != nil
 
-            # Set log level
-            - set(attributes["log.level"], severity_text) where severity_text != nil
+          # Set log level
+          - set(resource.attributes["log.level"], severity_text) where severity_text != nil
 
-            # Fluent Bit body → message
-            - set(attributes["message"], body) where body != nil and attributes["message"] == nil
-            # Fallback domain
-            - set(attributes["event.domain"], "default") where attributes["event.domain"] == nil
+          # Fluent Bit body → message
+          - set(resource.attributes["message"], body) where body != nil and resource.attributes["message"] == nil
+
+          # Fallback domain
+          - set(resource.attributes["event.domain"], "default") where resource.attributes["event.domain"] == nil
 
   # General attributes batching
   batch:
