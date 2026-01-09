@@ -211,79 +211,79 @@ exporters:
 service:
   extensions: [health_check]
   pipelines:
-    # traces:
-    #   receivers: [otlp]
-    #   processors: [memory_limiter, resourcedetection, batch]
-    #   exporters: [debug, kafka/traces]
-
-    # metrics:
-    #   receivers: [otlp]
-    #   processors: [memory_limiter, resourcedetection, batch]
-    #   exporters: [debug, kafka/metrics]
-
-    # # Pipeline for OHIF (EventHub)
-    # logs/ohif:
-    #   receivers: [azureeventhub/ohif]
-    #   processors: [memory_limiter, resource/ohif, batch]
-    #   exporters: [kafka/logs-ohif]
-
-    # # Pipeline for Dictation Backend (EventHub)
-    # logs/dictation_backend:
-    #   receivers: [azureeventhub/dictation_backend]
-    #   processors: [memory_limiter, resource/dictation_backend, batch]
-    #   # Using shared dictation topic or could split further. Let's start with shared 'otel-logs-dictation'
-    #   exporters: [kafka/logs-dictation_backend]
-
-    # # Pipeline for Dictation Frontend (EventHub)
-    # logs/dictation_frontend:
-    #   receivers: [azureeventhub/dictation_frontend]
-    #   processors: [memory_limiter, resource/dictation_frontend, batch]
-    #   exporters: [kafka/logs-dictation_frontend]
-
-    # # Pipelines for Specific Domains (Filtered from OTLP)
-    # logs/auth-session:
-    #   receivers: [otlp]
-    #   processors:
-    #     [
-    #       memory_limiter,
-    #       resourcedetection,
-    #       transform,
-    #       filter/auth-session,
-    #       batch,
-    #     ]
-    #   exporters: [debug, kafka/logs-auth-session]
-
-    # logs/worklist:
-    #   receivers: [otlp]
-    #   processors:
-    #     [memory_limiter, resourcedetection, transform, filter/worklist, batch]
-    #   exporters: [kafka/logs-worklist]
-
-    # logs/viewer:
-    #   receivers: [otlp]
-    #   processors:
-    #     [memory_limiter, resourcedetection, transform, filter/viewer, batch]
-    #   exporters: [kafka/logs-viewer]
-
-    # # Pipeline for Default/Fallback Logs
-    # logs/default:
-    #   receivers: [otlp]
-    #   processors:
-    #     [
-    #       memory_limiter,
-    #       resourcedetection,
-    #       transform,
-    #       filter/default_exclude,
-    #       batch,
-    #     ]
-    #   exporters: [debug, kafka/logs-default]
-    logs/raw:
+    traces:
       receivers: [otlp]
-      processors: []       # Skip processors here
-      exporters: [debug]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [debug, kafka/traces]
 
-    # Pipeline 2: Processed Data (With Transform)
-    logs/processed:
+    metrics:
       receivers: [otlp]
-      processors: [transform]
-      exporters: [debug]
+      processors: [memory_limiter, resourcedetection, batch]
+      exporters: [debug, kafka/metrics]
+
+    # Pipeline for OHIF (EventHub)
+    logs/ohif:
+      receivers: [azureeventhub/ohif]
+      processors: [memory_limiter, resource/ohif, batch]
+      exporters: [kafka/logs-ohif]
+
+    # Pipeline for Dictation Backend (EventHub)
+    logs/dictation_backend:
+      receivers: [azureeventhub/dictation_backend]
+      processors: [memory_limiter, resource/dictation_backend, batch]
+      # Using shared dictation topic or could split further. Let's start with shared 'otel-logs-dictation'
+      exporters: [kafka/logs-dictation_backend]
+
+    # Pipeline for Dictation Frontend (EventHub)
+    logs/dictation_frontend:
+      receivers: [azureeventhub/dictation_frontend]
+      processors: [memory_limiter, resource/dictation_frontend, batch]
+      exporters: [kafka/logs-dictation_frontend]
+
+    # Pipelines for Specific Domains (Filtered from OTLP)
+    logs/auth-session:
+      receivers: [otlp]
+      processors:
+        [
+          memory_limiter,
+          resourcedetection,
+          transform,
+          filter/auth-session,
+          batch,
+        ]
+      exporters: [debug, kafka/logs-auth-session]
+
+    logs/worklist:
+      receivers: [otlp]
+      processors:
+        [memory_limiter, resourcedetection, transform, filter/worklist, batch]
+      exporters: [kafka/logs-worklist]
+
+    logs/viewer:
+      receivers: [otlp]
+      processors:
+        [memory_limiter, resourcedetection, transform, filter/viewer, batch]
+      exporters: [kafka/logs-viewer]
+
+    # Pipeline for Default/Fallback Logs
+    logs/default:
+      receivers: [otlp]
+      processors:
+        [
+          memory_limiter,
+          resourcedetection,
+          transform,
+          filter/default_exclude,
+          batch,
+        ]
+      exporters: [debug, kafka/logs-default]
+    # logs/raw:
+    #   receivers: [otlp]
+    #   processors: []       # Skip processors here
+    #   exporters: [debug]
+
+    # # Pipeline 2: Processed Data (With Transform)
+    # logs/processed:
+    #   receivers: [otlp]
+    #   processors: [transform]
+    #   exporters: [debug]
