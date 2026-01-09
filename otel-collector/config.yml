@@ -43,19 +43,31 @@ processors:
     log_statements:
       - context: log
         statements:
+          # Log the entire structure before transformation
+          - Log("=== BEFORE TRANSFORM ===")
+          - Log("Body type: %s", body)
+          - Log("Severity: %s", severity_text)
+          - Log("Resource attributes: %s", resource.attributes)
+          - Log("Log attributes: %s", attributes)
+          
           # Copy resource attributes to log attributes
-            - set(attributes["event.domain"], resource.attributes["event.domain"]) where resource.attributes["event.domain"] != nil
-            - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
-            - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil
-            - set(attributes["app"], resource.attributes["app"]) where resource.attributes["app"] != nil
+          - set(attributes["event.domain"], resource.attributes["event.domain"]) where resource.attributes["event.domain"] != nil
+          - set(attributes["service.namespace"], resource.attributes["service.namespace"]) where resource.attributes["service.namespace"] != nil
+          - set(attributes["deployment.environment"], resource.attributes["deployment.environment"]) where resource.attributes["deployment.environment"] != nil
+          - set(attributes["app"], resource.attributes["app"]) where resource.attributes["app"] != nil
 
-            # Set log level
-            - set(attributes["log.level"], severity_text) where severity_text != nil
+          # Set log level
+          - set(attributes["log.level"], severity_text) where severity_text != nil
 
-            # Fluent Bit body → message
-            - set(attributes["message"], body) where body != nil and attributes["message"] == nil
-            # Fallback domain
-            - set(attributes["event.domain"], "auth-session") where attributes["event.domain"] == nil
+          # Fluent Bit body → message
+          - set(attributes["message"], body) where body != nil and attributes["message"] == nil
+          
+          # Fallback domain
+          - set(attributes["event.domain"], "auth-session") where attributes["event.domain"] == nil
+          
+          # Log after transformation
+          - Log("=== AFTER TRANSFORM ===")
+          - Log("Final attributes: %s", attributes)
 
   # General attributes batching
   batch:
@@ -134,9 +146,7 @@ processors:
 
 exporters:
   debug:
-    verbosity: detailed
-    sampling_initial: 10
-    sampling_thereafter: 10
+    verbosity: basic
 
   kafka/traces:
     brokers:
