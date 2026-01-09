@@ -98,31 +98,31 @@ processors:
     error_mode: ignore
     logs:
       log_record:
-        - 'resource.attributes["event.domain"] != "auth-session"'
+        - 'attributes["event.domain"] != "auth-session"'
 
   filter/worklist:
     error_mode: ignore
     logs:
       log_record:
-        - 'resource.attributes["event.domain"] != "worklist"'
+        - ' attributes["event.domain"] != "worklist"'
 
   filter/viewer:
     error_mode: ignore
     logs:
       log_record:
-        - 'resource.attributes["event.domain"] != "viewer"'
+        - 'attributes["event.domain"] != "viewer"'
 
   filter/trace:
     error_mode: ignore
     logs:
       log_record:
-        - 'resource.attributes["event.domain"] != "trace"'
+        - 'attributes["event.domain"] != "trace"'
 
   filter/metrics:
     error_mode: ignore
     logs:
       log_record:
-        - 'resource.attributes["event.domain"] != "metrics"'
+        - 'attributes["event.domain"] != "metrics"'
 
   # Filter for default pipeline: DROP logs that belong to specific domains
   # This KEEPS only logs with event.domain NOT in the list above
@@ -130,7 +130,7 @@ processors:
     error_mode: ignore
     logs:
       log_record:
-        - 'resource.attributes["event.domain"] == "auth-session" or attributes["event.domain"] == "worklist" or attributes["event.domain"] == "viewer" or attributes["event.domain"] == "trace" or attributes["event.domain"] == "metrics"'
+        - 'attributes["event.domain"] == "auth-session" or attributes["event.domain"] == "worklist" or attributes["event.domain"] == "viewer" or attributes["event.domain"] == "trace" or attributes["event.domain"] == "metrics"'
 
 exporters:
   debug:
