@@ -33,7 +33,7 @@ processors:
     limit_mib: 512
     spike_limit_mib: 128
 
-  resourcedetection:
+  resource_detection:
     detectors: [env, system]
     override: false
 
@@ -134,9 +134,7 @@ processors:
         - 'attributes["event.domain"] == "auth-session" or attributes["event.domain"] == "worklist" or attributes["event.domain"] == "viewer" or attributes["event.domain"] == "trace" or attributes["event.domain"] == "metrics"'
 
 exporters:
-  debug/raw:
-    verbosity: detailed
-  debug/processed:
+  debug:
     verbosity: detailed
 
   kafka/traces:
@@ -214,13 +212,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, batch]
-      exporters: [debug/raw, kafka/traces]
+      processors: [memory_limiter, resource_detection, batch]
+      exporters: [debug, kafka/traces]
 
     metrics:
       receivers: [otlp]
-      processors: [memory_limiter, resourcedetection, batch]
-      exporters: [debug/raw, kafka/metrics]
+      processors: [memory_limiter, resource_detection, batch]
+      exporters: [debug, kafka/metrics]
 
     # Pipeline for OHIF (EventHub)
     logs/ohif:
@@ -247,24 +245,24 @@ service:
       processors:
         [
           memory_limiter,
-          resourcedetection,
+          resource_detection,
           transform,
           filter/auth-session,
           batch,
         ]
-      exporters: [debug/raw, kafka/logs-auth-session, debug/processed]
+      exporters: [debug, kafka/logs-auth-session]
 
     logs/worklist:
       receivers: [otlp]
       processors:
-        [memory_limiter, resourcedetection, transform, filter/worklist, batch]
-      exporters: [debug/raw, kafka/logs-worklist, debug/processed]
+        [memory_limiter, resource_detection, transform, filter/worklist, batch]
+      exporters: [kafka/logs-worklist]
 
     logs/viewer:
       receivers: [otlp]
       processors:
-        [memory_limiter, resourcedetection, transform, filter/viewer, batch]
-      exporters: [debug/raw, kafka/logs-viewer, debug/processed]
+        [memory_limiter, resource_detection, transform, filter/viewer, batch]
+      exporters: [kafka/logs-viewer]
 
     # Pipeline for Default/Fallback Logs
     logs/default:
@@ -272,9 +270,20 @@ service:
       processors:
         [
           memory_limiter,
-          resourcedetection,
+          resource_detection,
           transform,
           filter/default_exclude,
           batch,
         ]
-      exporters: [debug/raw, kafka/logs-default, debug/processed]
+      exporters: [debug, kafka/logs-default]
+    # Pipeline 1: Raw Data (No Processors)
+    logs/raw:
+      receivers: [otlp]
+      processors: []       # Skip processors here
+      exporters: [debug]
+
+    # Pipeline 2: Processed Data (With Transform)
+    logs/processed:
+      receivers: [otlp]
+      processors: [transform]
+      exporters: [debug]
