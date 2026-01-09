@@ -43,27 +43,23 @@ processors:
     log_statements:
       - context: log
         statements:
-          # ---------------------------------------------------------
-          # CHANGED: Handle Map Body (Standard OTLP from Fluent Bit)
-          # ---------------------------------------------------------
-          # Fluent Bit sends the record as a Map. We merge it directly into attributes.
-          # We do NOT use ParseJSON because it is not a string string.
-          - merge_maps(attributes, body, "upsert")
+          # ------------------------------------------------------------------
+          # CRITICAL FIX: Handle the Map received from Fluent Bit
+          # ------------------------------------------------------------------
+          # 1. Merge the incoming Body (which is a Map) into Attributes
+          - merge_maps(attributes, body, "upsert") 
 
-          # ---------------------------------------------------------
-          # Logic to Promote Attributes to Resources (Same as before)
-          # ---------------------------------------------------------
+          # 2. Now Attributes contains "event.domain", "service.namespace", etc.
+          #    Promote them to Resource Attributes (for routing)
           - set(resource.attributes["event.domain"], attributes["event.domain"])
           - set(resource.attributes["service.namespace"], attributes["service.namespace"])
           - set(resource.attributes["app"], attributes["app"])
           - set(resource.attributes["deployment.environment"], attributes["deployment.environment"])
 
-          # ---------------------------------------------------------
-          # Cleanup: Set Body to just the log message
-          # ---------------------------------------------------------
+          # 3. Clean up: Set the Body to just the actual log message string
           - set(body, attributes["log"]) where attributes["log"] != nil
           
-          # Fallback
+          # 4. Fallback (just in case)
           - set(resource.attributes["event.domain"], "default") where resource.attributes["event.domain"] == nil
 
 
