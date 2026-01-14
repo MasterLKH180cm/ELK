@@ -10,6 +10,7 @@ from typing import Optional
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from opentelemetry import trace
 from opentelemetry._logs import set_logger_provider
 from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
@@ -111,6 +112,53 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 FastAPIInstrumentor.instrument_app(app)
+
+# CORS Configuration - Best Practices
+# Configure via environment variables for flexibility across environments
+ALLOWED_ORIGINS = os.getenv(
+    "CORS_ALLOWED_ORIGINS",
+    "*"
+).split(",")
+
+# For development only - set CORS_ALLOW_ALL=true in environment
+ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL", "false").lower() == "true"
+
+if ALLOW_ALL_ORIGINS:
+    logger.warning(
+        "CORS: Allowing all origins - This should only be used in development!",
+        extra={"security.warning": "cors_allow_all_enabled"}
+    )
+    ALLOWED_ORIGINS = ["*"]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+    allow_headers=[
+        "*",  # Allow all headers for maximum compatibility
+        # Common headers explicitly listed for documentation:
+        "Content-Type",
+        "Authorization",
+        "X-Request-ID",
+        "X-Correlation-ID",
+        "X-Service-Name",
+        "X-Service-Version",
+        "X-Environment",
+        "X-Log-Level",
+        "X-Event-Type",
+        "X-Event-Category",
+        "X-Event-Domain",
+    ],
+    expose_headers=[
+        "X-Request-ID",
+        "X-Correlation-ID",
+        "X-RateLimit-Limit",
+        "X-RateLimit-Remaining",
+        "X-RateLimit-Reset",
+    ],
+    max_age=600,  # Cache preflight requests for 10 minutes
+)
 
 
 @app.get("/healthz")
