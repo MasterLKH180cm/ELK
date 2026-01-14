@@ -221,6 +221,13 @@ service:
       processors: [memory_limiter, resourcedetection, batch]
       exporters: [debug, kafka/metrics]
 
+    # Pipeline for OHIF (Frontend)
+    logs/ohif-frontend:
+      receivers: [otlp]
+      processors: [memory_limiter, resource/ohif, batch]
+      exporters: [kafka/logs-ohif]
+
+
     # Pipeline for OHIF (EventHub)
     logs/ohif:
       receivers: [azureeventhub/ohif]
