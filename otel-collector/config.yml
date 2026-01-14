@@ -132,7 +132,7 @@ processors:
     error_mode: ignore
     logs:
       log_record:
-        - 'attributes["event.domain"] == "auth-session" or attributes["event.domain"] == "worklist" or attributes["event.domain"] == "viewer" or attributes["event.domain"] == "trace" or attributes["event.domain"] == "metrics"'
+        - 'attributes["event.domain"] == "auth-session" or attributes["event.domain"] == "worklist" or attributes["event.domain"] == "viewer" or attributes["event.domain"] == "trace" or attributes["event.domain"] == "metrics" or attributes["event.domain"] == "ohif"'
 
 exporters:
   debug:
