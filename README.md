@@ -18,12 +18,23 @@ docker-compose ps
 
 ### 2. Access Services
 
-| Service | URL | Purpose |
-|---------|-----|---------|
-| Kibana | http://localhost:5601 | Log visualization & dashboards |
-| Elasticsearch | http://localhost:9200 | Log storage & search |
-| FastAPI App | http://localhost:8000 | Sample application |
-| Kafka UI | http://localhost:8888 | Kafka broker visualization |
+#### HTTPS Endpoints (via Nginx reverse proxy)
+
+| Service | HTTPS URL | Port | Purpose |
+|---------|-----------|------|---------||
+| Kibana | https://localhost | 443 | Log visualization & dashboards |
+| FastAPI App | https://localhost:8443 | 8443 | Sample application API |
+| Elasticsearch | https://localhost:9243 | 9243 | Log storage & search |
+| Kafka UI | https://localhost:8889 | 8889 | Kafka broker visualization |
+
+#### HTTP Endpoints (internal/direct access)
+
+| Service | HTTP URL | Purpose |
+|---------|----------|---------||
+| Kibana | http://localhost:5601 | Direct Kibana access |
+| Elasticsearch | http://localhost:9200 | Direct Elasticsearch access |
+| FastAPI App | http://localhost:8000 | Direct API access |
+| Kafka UI | http://localhost:8888 | Direct Kafka UI access |
 | OTLP Collector Health | http://localhost:13133 | Telemetry collection status |
 | Logstash API | http://localhost:9600 | Pipeline metrics |
 
@@ -86,6 +97,44 @@ KIBANA_PORT=5601
 KAFKA_PORT=9092
 LOGSTASH_PORT=5000
 ```
+
+### SSL/TLS Configuration (Nginx)
+
+The stack includes an Nginx reverse proxy for HTTPS termination with the following features:
+
+- **TLS 1.2/1.3** with modern cipher suites
+- **HTTP/2** enabled for all HTTPS endpoints
+- **Security headers**: X-Frame-Options, X-Content-Type-Options, X-XSS-Protection
+- **Rate limiting** protection against abuse
+- **Gzip compression** for improved performance
+- **WebSocket support** for Kibana and real-time features
+- **CORS headers** configured for FastAPI endpoints
+
+#### SSL Certificates
+
+Certificates are stored in `nginx/certs/`:
+
+```bash
+# Generate self-signed certificates for development
+docker run --rm -v "${PWD}/nginx/certs:/certs" alpine/openssl \
+  req -x509 -nodes -days 365 -newkey rsa:2048 \
+  -keyout /certs/server.key -out /certs/server.crt \
+  -subj "/CN=localhost"
+```
+
+**For production**: Replace with certificates from a trusted CA (Let's Encrypt, etc.)
+
+#### Nginx Configuration
+
+Configuration file: `nginx/nginx.conf`
+
+| Feature | Description |
+|---------|-------------|
+| Rate Limiting | 10 req/s per IP (API), burst allowed |
+| Connection Limits | 50-100 concurrent connections per IP |
+| Timeouts | 120s read, 60s connect/send |
+| Buffer Size | 256k proxy buffers |
+| Keepalive | 32 connections per upstream |
 
 ## Complete Logging Data Flow
 

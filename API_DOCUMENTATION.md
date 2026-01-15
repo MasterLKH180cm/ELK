@@ -10,7 +10,11 @@ FastAPI application with integrated OpenTelemetry (OTel) for comprehensive obser
 - **Middleware**: Automatic HTTP request/response logging with exception handling
 - **Error Tracking**: Full exception context and stack traces in logs
 
-**Base URL:** `http://localhost:8000`
+**Base URLs:**
+- HTTPS (recommended): `https://localhost:8443`
+- HTTP (direct): `http://localhost:8000`
+
+> **Note:** HTTPS access requires valid SSL certificates in `nginx/certs/`. Self-signed certificates will show browser warnings.
 
 ## Architecture Overview
 
@@ -212,19 +216,30 @@ Submit a log message with comprehensive OpenTelemetry instrumentation, automatic
 
 ##### Basic Request (cURL)
 ```bash
+# HTTPS (recommended)
+curl -k https://localhost:8443/api/logs
+
+# HTTP (direct)
 curl http://localhost:8000/api/logs
 ```
 
 ##### Custom Message
 ```bash
+# HTTPS
+curl -k "https://localhost:8443/api/logs?message=User%20authentication%20successful"
+
+# HTTP
 curl "http://localhost:8000/api/logs?message=User%20authentication%20successful"
 ```
+
+> **Note:** Use `-k` flag with curl for self-signed certificates. Remove for production with valid CA certificates.
 
 ##### Domain-Specific Examples (PowerShell)
 
 ```powershell
 # Auth-Session Domain - Authentication, authorization and session logs
-curl.exe -X GET "http://localhost:8000/api/logs?message=User%20login%20successful" `
+# HTTPS (recommended)
+curl.exe -k -X GET "https://localhost:8443/api/logs?message=User%20login%20successful" `
   -H "X-Service-Name: auth-session-api" `
   -H "X-Service-Version: 1.2.0" `
   -H "X-Environment: prod" `
@@ -235,7 +250,7 @@ curl.exe -X GET "http://localhost:8000/api/logs?message=User%20login%20successfu
 # → Routes to: otel-logs-auth-session → logs-auth-session-default
 
 # Worklist Domain - Task and worklist operations
-curl.exe -X GET "http://localhost:8000/api/logs?message=Worklist%20query%20executed" `
+curl.exe -k -X GET "https://localhost:8443/api/logs?message=Worklist%20query%20executed" `
   -H "X-Service-Name: worklist-api" `
   -H "X-Service-Version: 1.5.0" `
   -H "X-Environment: prod" `
