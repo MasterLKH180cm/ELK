@@ -3,7 +3,7 @@
 # Comprehensive test script for ALL log attribute combinations
 # Tests all combinations: environment × log_level × event_domain × event_type × event_category
 
-BASE_URL="http://20.14.90.107:8000/api/logs"
+BASE_URL="https://20.14.90.107:8443/api/logs"
 SERVICE_NAME="test-service"
 SERVICE_VERSION="1.0.0"
 
@@ -43,8 +43,8 @@ test_endpoint() {
     # Build query parameter
     local query_message=$(echo "${message}" | sed 's/ /%20/g')
     
-    # Build curl command
-    local response=$(curl -s -w "\n%{http_code}" \
+    # Build curl command with -k for self-signed certificates
+    local response=$(curl -sk -w "\n%{http_code}" \
         -X GET "${BASE_URL}?message=${query_message}" \
         -H "X-Service-Name: ${SERVICE_NAME}" \
         -H "X-Service-Version: ${SERVICE_VERSION}" \
