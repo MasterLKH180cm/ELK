@@ -22,6 +22,7 @@ class LogLevel(str, Enum):
     INFO = "INFO"
     DEBUG = "DEBUG"
     TRACE = "TRACE"
+    CRITICAL = "CRITICAL"
 
 
 class EventDomain(str, Enum):
