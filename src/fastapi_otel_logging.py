@@ -125,7 +125,11 @@ if ALLOW_ALL_ORIGINS:
         "CORS: Allowing all origins - This should only be used in development!",
         extra={"security.warning": "cors_allow_all_enabled"},
     )
-    ALLOWED_ORIGINS = ["*"]
+    ALLOWED_ORIGINS = [
+        "https://reporting-frontend-hvegfdd6b0h3e6bg.westus3-01.azurewebsites.net/",
+        "https://ohif-bcbzfueeeegufea3.westus3-01.azurewebsites.net/",
+        "http://localhost:3000",
+    ]
 
 app.add_middleware(
     CORSMiddleware,
