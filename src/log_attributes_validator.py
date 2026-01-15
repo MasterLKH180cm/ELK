@@ -34,6 +34,7 @@ class EventDomain(str, Enum):
     OHIF = "ohif"
     WORKLIST = "worklist"
     VIEWER = "viewer"
+    DEFAULT = "default"
 
 
 class EventType(str, Enum):

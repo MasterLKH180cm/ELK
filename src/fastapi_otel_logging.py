@@ -115,10 +115,7 @@ FastAPIInstrumentor.instrument_app(app)
 
 # CORS Configuration - Best Practices
 # Configure via environment variables for flexibility across environments
-ALLOWED_ORIGINS = os.getenv(
-    "CORS_ALLOWED_ORIGINS",
-    "*"
-).split(",")
+ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
 
 # For development only - set CORS_ALLOW_ALL=true in environment
 ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL", "false").lower() == "true"
@@ -126,7 +123,7 @@ ALLOW_ALL_ORIGINS = os.getenv("CORS_ALLOW_ALL", "false").lower() == "true"
 if ALLOW_ALL_ORIGINS:
     logger.warning(
         "CORS: Allowing all origins - This should only be used in development!",
-        extra={"security.warning": "cors_allow_all_enabled"}
+        extra={"security.warning": "cors_allow_all_enabled"},
     )
     ALLOWED_ORIGINS = ["*"]
 
@@ -252,7 +249,7 @@ async def log_requests(request: Request, call_next):
     log_level = request.headers.get("X-Log-Level", "INFO")
     event_type = request.headers.get("X-Event-Type", "access")
     event_category = request.headers.get("X-Event-Category", "api")
-    event_domain = request.headers.get("X-Event-Domain", "backend")
+    event_domain = request.headers.get("X-Event-Domain", "default")
 
     # 基礎屬性（會被驗證器補充）
     base_attributes = {
