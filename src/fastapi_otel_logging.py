@@ -137,16 +137,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=[
-        "*",  # Allow all headers for maximum compatibility
-        # Common headers explicitly listed for documentation:
         "Content-Type",
         "Authorization",
         "X-Request-ID",
         "X-Correlation-ID",
         "X-Service-Name",
         "X-Service-Version",
-        "X-Environment",
-        "X-Log-Level",
+        "X-Environment",  # Make sure this is listed
+        "X-Log-Level",  # Note: case sensitivity matters
         "X-Event-Type",
         "X-Event-Category",
         "X-Event-Domain",
