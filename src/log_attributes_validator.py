@@ -80,7 +80,7 @@ class LogAttributesValidator:
     ]
 
     # 有效的環境值
-    VALID_ENVIRONMENTS = ["prod", "staging", "dev", "test"]
+    VALID_ENVIRONMENTS = ["prod", "staging", "dev", "test", "development"]
 
     @staticmethod
     def validate_attributes(
