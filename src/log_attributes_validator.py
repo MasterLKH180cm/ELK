@@ -30,6 +30,7 @@ class EventDomain(str, Enum):
     AUTH_SESSION = "auth-session"
     DICTATION_FRONTEND = "dictation_frontend"
     DICTATION_BACKEND = "dictation_backend"
+    OHIF = "ohif"
     WORKLIST = "worklist"
     VIEWER = "viewer"
 
