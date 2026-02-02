@@ -74,7 +74,7 @@ Configure services via `.env` file:
 
 ```bash
 # Elasticsearch/Kibana/Logstash Version
-ELASTIC_VERSION=8.10.0
+ELASTIC_VERSION=8.12.0
 
 # Memory Allocation
 LS_HEAP_SIZE=1g            # Logstash JVM heap
